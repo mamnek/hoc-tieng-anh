@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
+import { YoutubeTranscript } from 'youtube-transcript';
 import { convertSentenceToIpa } from '@/lib/ipa-generator';
 import { VideoSegment, VideoQuizQuestion } from '@/lib/types';
 
@@ -9,9 +10,11 @@ function decodeHtmlEntities(str: string): string {
     .replace(/&gt;/g, '>')
     .replace(/&quot;/g, '"')
     .replace(/&#39;/g, "'")
-    .replace(/&ndash;/g, '-')
-    .replace(/&mdash;/g, '-')
-    .replace(/&nbsp;/g, ' ');
+    .replace(/&ndash;/g, '–')
+    .replace(/&mdash;/g, '—')
+    .replace(/&nbsp;/g, ' ')
+    .replace(/\n/g, ' ')
+    .trim();
 }
 
 async function safeTranslateToVietnamese(text: string): Promise<string> {
@@ -22,42 +25,28 @@ async function safeTranslateToVietnamese(text: string): Promise<string> {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
       },
     });
-
-    if (!res.ok) return `Dịch: ${text}`;
+    if (!res.ok) {
+      console.log(`[Translate] HTTP ${res.status} for: "${text.slice(0, 50)}..."`);
+      return text;
+    }
     const rawText = await res.text();
-    if (!rawText || !rawText.trim() || !rawText.startsWith('[')) {
-      return `Dịch: ${text}`;
+    if (!rawText || !rawText.trim().startsWith('[')) {
+      return text;
     }
-
     const data = JSON.parse(rawText);
-    if (data && data[0] && Array.isArray(data[0])) {
-      return data[0].map((t: any) => (t && t[0] ? t[0] : '')).join('');
+    if (data?.[0] && Array.isArray(data[0])) {
+      return data[0].map((t: any) => t?.[0] || '').join('');
     }
-    return `Dịch: ${text}`;
-  } catch (err) {
-    return `Dịch: ${text}`;
+    return text;
+  } catch (err: any) {
+    console.log(`[Translate] Error: ${err.message}`);
+    return text;
   }
-}
-
-// Helper to parse YouTube XML timedtext
-function parseXmlTimedtext(xmlText: string): { start: number; duration: number; text: string }[] {
-  const segments: { start: number; duration: number; text: string }[] = [];
-  const regex = /<text start="([\d\.]+)" (?:dur="([\d\.]+)"[^>]*)?>(.*?)<\/text>/gi;
-  let match;
-  while ((match = regex.exec(xmlText)) !== null) {
-    const start = Math.floor(parseFloat(match[1]));
-    const duration = Math.ceil(parseFloat(match[2] || '3'));
-    const rawContent = match[3].replace(/<[^>]*>/g, '').trim();
-    const text = decodeHtmlEntities(rawContent);
-    if (text) {
-      segments.push({ start, duration, text });
-    }
-  }
-  return segments;
 }
 
 export async function POST(req: NextRequest) {
   try {
+    // Parse request body safely
     let body: any = {};
     try {
       const rawBodyText = await req.text();
@@ -66,13 +55,12 @@ export async function POST(req: NextRequest) {
       }
     } catch (err) {
       return NextResponse.json(
-        { success: false, error: 'Dữ liệu Yêu cầu (Request Body) không đúng định dạng JSON.' },
+        { success: false, error: 'Dữ liệu gửi lên không đúng định dạng JSON.' },
         { status: 400 }
       );
     }
 
     const { youtubeId } = body;
-
     if (!youtubeId || typeof youtubeId !== 'string') {
       return NextResponse.json(
         { success: false, error: 'Thiếu tham số youtubeId hợp lệ.' },
@@ -80,111 +68,178 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    let rawSegments: { start: number; duration: number; text: string }[] = [];
+    console.log(`\n========== [YouTube Transcript] Processing video: ${youtubeId} ==========`);
 
-    // METHOD 1: Direct YouTube TimedText API endpoints (Manual CC & Auto ASR Captions)
-    const timedTextUrls = [
-      `https://www.youtube.com/api/timedtext?v=${youtubeId}&lang=en`,
-      `https://www.youtube.com/api/timedtext?v=${youtubeId}&kind=asr&lang=en`,
-      `https://www.youtube.com/api/timedtext?v=${youtubeId}&lang=en-US`,
-      `https://www.youtube.com/api/timedtext?v=${youtubeId}&kind=asr&lang=en-US`,
-      `https://www.youtube.com/api/timedtext?v=${youtubeId}&lang=en-GB`,
-    ];
+    // ─── PRIMARY METHOD: youtube-transcript npm library ───
+    // This library uses InnerTube API (Android client) + web page scraping fallback.
+    // It handles consent pages, cookie issues, and HTML entity decoding internally.
+    interface RawSeg { start: number; duration: number; text: string }
+    let rawSegments: RawSeg[] = [];
 
-    for (const url of timedTextUrls) {
+    // Attempt 1: English (en)
+    const langAttempts = ['en', 'en-US', 'en-GB'];
+    for (const lang of langAttempts) {
+      if (rawSegments.length > 0) break;
       try {
-        const ttRes = await fetch(url, {
-          headers: {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-          },
-          cache: 'no-store',
-        });
-        if (ttRes.ok) {
-          const xmlText = await ttRes.text();
-          if (xmlText && xmlText.includes('<text')) {
-            const parsed = parseXmlTimedtext(xmlText);
-            if (parsed.length > 0) {
-              rawSegments = parsed;
-              break;
-            }
-          }
+        console.log(`[Method: youtube-transcript lib] Trying lang="${lang}"...`);
+        const transcript = await YoutubeTranscript.fetchTranscript(youtubeId, { lang });
+        if (transcript && transcript.length > 0) {
+          rawSegments = transcript.map((item) => ({
+            start: Math.floor((item.offset || 0) / 1000),
+            duration: Math.ceil((item.duration || 3000) / 1000),
+            text: decodeHtmlEntities(item.text),
+          })).filter((s) => s.text.length > 0);
+          console.log(`[Method: youtube-transcript lib] ✓ Success with lang="${lang}": ${rawSegments.length} segments`);
+          console.log(`[Method: youtube-transcript lib] First segment: "${rawSegments[0]?.text.slice(0, 80)}..."`);
         }
-      } catch (e) {}
+      } catch (err: any) {
+        console.log(`[Method: youtube-transcript lib] ✗ Failed lang="${lang}": ${err.message}`);
+      }
     }
 
-    // METHOD 2: Public YouTube Transcript Proxy API (if Method 1 returned no segments)
+    // Attempt 2: No specific language (let library pick default/auto-generated)
     if (rawSegments.length === 0) {
       try {
-        const proxyRes = await fetch(`https://yt-transcript-api.vercel.app/api/transcript?videoId=${youtubeId}`, {
-          cache: 'no-store',
-        });
-        if (proxyRes.ok) {
-          const proxyText = await proxyRes.text();
-          if (proxyText && proxyText.trim().startsWith('[')) {
-            const proxyJson = JSON.parse(proxyText);
-            if (Array.isArray(proxyJson) && proxyJson.length > 0) {
-              rawSegments = proxyJson.map((item: any) => ({
-                start: Math.floor(item.start || 0),
-                duration: Math.ceil(item.duration || 3),
-                text: decodeHtmlEntities(item.text || '').replace(/\n/g, ' ').trim(),
-              })).filter((s: any) => s.text);
-            }
-          }
+        console.log(`[Method: youtube-transcript lib] Trying without lang filter (auto/default)...`);
+        const transcript = await YoutubeTranscript.fetchTranscript(youtubeId);
+        if (transcript && transcript.length > 0) {
+          rawSegments = transcript.map((item) => ({
+            start: Math.floor((item.offset || 0) / 1000),
+            duration: Math.ceil((item.duration || 3000) / 1000),
+            text: decodeHtmlEntities(item.text),
+          })).filter((s) => s.text.length > 0);
+          console.log(`[Method: youtube-transcript lib] ✓ Success (no lang): ${rawSegments.length} segments`);
+          console.log(`[Method: youtube-transcript lib] First segment: "${rawSegments[0]?.text.slice(0, 80)}..."`);
         }
-      } catch (e) {}
+      } catch (err: any) {
+        console.log(`[Method: youtube-transcript lib] ✗ Failed (no lang): ${err.message}`);
+      }
     }
 
-    // METHOD 3: Scrape YouTube HTML page playerResponse captionTracks (if Methods 1 & 2 returned no segments)
+    // ─── FALLBACK: Direct YouTube TimedText XML API ───
+    if (rawSegments.length === 0) {
+      const timedTextUrls = [
+        `https://www.youtube.com/api/timedtext?v=${youtubeId}&lang=en`,
+        `https://www.youtube.com/api/timedtext?v=${youtubeId}&lang=en&kind=asr`,
+        `https://www.youtube.com/api/timedtext?v=${youtubeId}&lang=en-US`,
+      ];
+      for (const url of timedTextUrls) {
+        if (rawSegments.length > 0) break;
+        try {
+          console.log(`[Method: TimedText XML] Trying: ${url.slice(0, 100)}...`);
+          const res = await fetch(url, {
+            headers: {
+              'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+              'Cookie': 'CONSENT=YES+1',
+            },
+            cache: 'no-store',
+          });
+          console.log(`[Method: TimedText XML] HTTP ${res.status}`);
+          if (res.ok) {
+            const xmlText = await res.text();
+            console.log(`[Method: TimedText XML] Response length: ${xmlText.length} chars, starts with: "${xmlText.slice(0, 100)}"`);
+            if (xmlText.includes('<text')) {
+              const regex = /<text start="([\d.]+)"(?: dur="([\d.]+)")?[^>]*>(.*?)<\/text>/gi;
+              let m;
+              while ((m = regex.exec(xmlText)) !== null) {
+                const text = decodeHtmlEntities(m[3].replace(/<[^>]*>/g, ''));
+                if (text) {
+                  rawSegments.push({
+                    start: Math.floor(parseFloat(m[1])),
+                    duration: Math.ceil(parseFloat(m[2] || '3')),
+                    text,
+                  });
+                }
+              }
+              console.log(`[Method: TimedText XML] ✓ Parsed ${rawSegments.length} segments`);
+            }
+          }
+        } catch (err: any) {
+          console.log(`[Method: TimedText XML] ✗ Error: ${err.message}`);
+        }
+      }
+    }
+
+    // ─── FALLBACK 2: Scrape YouTube HTML with CONSENT cookie ───
     if (rawSegments.length === 0) {
       try {
-        const ytUrl = `https://www.youtube.com/watch?v=${youtubeId}`;
-        const ytRes = await fetch(ytUrl, {
+        console.log(`[Method: HTML Scrape] Fetching youtube.com/watch?v=${youtubeId} with CONSENT cookie...`);
+        const ytRes = await fetch(`https://www.youtube.com/watch?v=${youtubeId}`, {
           headers: {
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
             'Accept-Language': 'en-US,en;q=0.9',
+            'Cookie': 'CONSENT=YES+cb.20210328-17-p0.en+FX+634',
           },
           cache: 'no-store',
         });
+        console.log(`[Method: HTML Scrape] HTTP ${ytRes.status}`);
 
         if (ytRes.ok) {
           const html = await ytRes.text();
-          const match = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
-          let captionTracks: any[] = [];
+          console.log(`[Method: HTML Scrape] HTML length: ${html.length} chars`);
 
-          if (match) {
-            try {
-              const playerResponse = JSON.parse(match[1]);
-              captionTracks = playerResponse?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
-            } catch (e) {}
-          }
+          // Check for consent page
+          if (html.includes('consent.youtube.com') || html.includes('consent.google.com')) {
+            console.log(`[Method: HTML Scrape] ✗ Got consent/cookie wall page instead of video page`);
+          } else {
+            const match = html.match(/ytInitialPlayerResponse\s*=\s*({.+?});/);
+            if (match) {
+              console.log(`[Method: HTML Scrape] Found ytInitialPlayerResponse`);
+              try {
+                const pr = JSON.parse(match[1]);
+                const tracks = pr?.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+                console.log(`[Method: HTML Scrape] Found ${tracks.length} caption tracks`);
 
-          if (captionTracks.length > 0) {
-            const enTrack = captionTracks.find((t: any) => t.languageCode?.startsWith('en')) || captionTracks[0];
-            if (enTrack?.baseUrl) {
-              const capRes = await fetch(enTrack.baseUrl, {
-                headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
-              });
-              if (capRes.ok) {
-                const xmlText = await capRes.text();
-                rawSegments = parseXmlTimedtext(xmlText);
+                const enTrack = tracks.find((t: any) => t.languageCode?.startsWith('en')) || tracks[0];
+                if (enTrack?.baseUrl) {
+                  console.log(`[Method: HTML Scrape] Fetching caption baseUrl for lang="${enTrack.languageCode}"...`);
+                  const capRes = await fetch(enTrack.baseUrl, {
+                    headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)' },
+                  });
+                  if (capRes.ok) {
+                    const xmlText = await capRes.text();
+                    const regex = /<text start="([\d.]+)"(?: dur="([\d.]+)")?[^>]*>(.*?)<\/text>/gi;
+                    let m;
+                    while ((m = regex.exec(xmlText)) !== null) {
+                      const text = decodeHtmlEntities(m[3].replace(/<[^>]*>/g, ''));
+                      if (text) {
+                        rawSegments.push({
+                          start: Math.floor(parseFloat(m[1])),
+                          duration: Math.ceil(parseFloat(m[2] || '3')),
+                          text,
+                        });
+                      }
+                    }
+                    console.log(`[Method: HTML Scrape] ✓ Parsed ${rawSegments.length} segments from baseUrl`);
+                  }
+                }
+              } catch (e: any) {
+                console.log(`[Method: HTML Scrape] ✗ JSON parse error: ${e.message}`);
               }
+            } else {
+              console.log(`[Method: HTML Scrape] ✗ ytInitialPlayerResponse not found in HTML`);
             }
           }
         }
-      } catch (e) {}
+      } catch (err: any) {
+        console.log(`[Method: HTML Scrape] ✗ Fetch error: ${err.message}`);
+      }
     }
+
+    // ─── Final check ───
+    console.log(`[Result] Total raw segments: ${rawSegments.length}`);
 
     if (rawSegments.length === 0) {
       return NextResponse.json(
         {
           success: false,
-          error: 'Video này không tìm thấy phụ đề tiếng Anh [CC] hoặc phụ đề bị tắt bởi chủ kênh. Vui lòng chọn video YouTube khác!',
+          error: 'Không thể tải phụ đề tiếng Anh cho video này. Nguyên nhân có thể: (1) Video không có phụ đề tiếng Anh [CC], (2) Phụ đề bị tắt bởi chủ kênh, hoặc (3) YouTube đang chặn truy cập từ máy chủ. Vui lòng thử video YouTube khác có bật CC tiếng Anh.',
         },
         { status: 400 }
       );
     }
 
-    // Step 4: Merge micro-fragments into complete natural spoken sentences (8+ words or punctuation)
+    // ─── Merge micro-fragments into natural sentences ───
     const mergedSegments: { start: number; end: number; text: string }[] = [];
     let currentText = '';
     let currentStart = rawSegments[0].start;
@@ -195,7 +250,6 @@ export async function POST(req: NextRequest) {
       if (!currentText) {
         currentStart = seg.start;
       }
-
       currentText += (currentText ? ' ' : '') + seg.text;
       currentEnd = seg.start + seg.duration;
 
@@ -212,12 +266,11 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Take top 6-8 segments for optimal study lesson
     const targetSegments = mergedSegments.slice(0, 8);
+    console.log(`[Result] Merged into ${mergedSegments.length} sentences, using top ${targetSegments.length}`);
 
-    // Step 5: Translate each real segment to Vietnamese & generate IPA
+    // ─── Translate & generate IPA ───
     const finalSegments: VideoSegment[] = [];
-
     for (let idx = 0; idx < targetSegments.length; idx++) {
       const seg = targetSegments[idx];
       const translationVi = await safeTranslateToVietnamese(seg.text);
@@ -235,7 +288,7 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // Step 6: Generate Real Quizzes based on actual vocabulary
+    // ─── Generate Quizzes from real vocabulary ───
     const finalQuizzes: VideoQuizQuestion[] = [];
     if (finalSegments.length > 0) {
       const seg1 = finalSegments[0];
@@ -247,7 +300,7 @@ export async function POST(req: NextRequest) {
         videoId: youtubeId,
         segmentId: seg1.id,
         type: 'meaning',
-        question: `Trong lời thoại "#1: ${seg1.textEn.slice(0, 40)}...", từ "${targetWord}" có nghĩa là gì?`,
+        question: `Trong lời thoại "#1: ${seg1.textEn.slice(0, 50)}...", từ "${targetWord}" có nghĩa là gì?`,
         options: [
           `Nghĩa đúng của từ "${targetWord}" trong ngữ cảnh`,
           'Từ trái nghĩa không liên quan',
@@ -255,7 +308,7 @@ export async function POST(req: NextRequest) {
           'Phương án không chính xác',
         ],
         correctAnswerIndex: 0,
-        explanation: `Từ "${targetWord}" xuất hiện trực tiếp trong lời thoại thật của video tại mốc ${seg1.startTime}s.`,
+        explanation: `Từ "${targetWord}" xuất hiện trong lời thoại thật của video tại mốc ${seg1.startTime}s.`,
       });
 
       if (finalSegments.length > 1) {
@@ -265,21 +318,16 @@ export async function POST(req: NextRequest) {
           videoId: youtubeId,
           segmentId: seg2.id,
           type: 'fill-in-the-blank',
-          question: `Điền từ còn thiếu trong câu thoại của video: "${seg2.textEn.replace(
-            targetWord,
-            '_______'
-          )}"`,
-          options: [
-            targetWord,
-            'different',
-            'unknown',
-            'incorrect',
-          ],
+          question: `Điền từ còn thiếu: "${seg2.textEn.replace(targetWord, '_______')}"`,
+          options: [targetWord, 'different', 'unknown', 'incorrect'],
           correctAnswerIndex: 0,
-          explanation: `Đáp án đúng là "${targetWord}" theo lời thoại thật của nhân vật/người nói trong video.`,
+          explanation: `Đáp án đúng là "${targetWord}" theo lời thoại thật của video.`,
         });
       }
     }
+
+    console.log(`[Result] ✓ Done! ${finalSegments.length} segments, ${finalQuizzes.length} quizzes`);
+    console.log(`========== [YouTube Transcript] Completed ==========\n`);
 
     return NextResponse.json({
       success: true,
@@ -287,10 +335,11 @@ export async function POST(req: NextRequest) {
       quizzes: finalQuizzes,
     });
   } catch (error: any) {
+    console.error(`[YouTube Transcript] Unhandled error:`, error);
     return NextResponse.json(
       {
         success: false,
-        error: `Lỗi xử lý máy chủ: ${error?.message || 'Không thể tải phụ đề YouTube.'}`,
+        error: `Lỗi xử lý máy chủ: ${error?.message || 'Không thể tải phụ đề.'}`,
       },
       { status: 500 }
     );
