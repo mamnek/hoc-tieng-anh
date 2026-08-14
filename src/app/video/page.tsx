@@ -137,6 +137,12 @@ export default function VideoHubPage() {
 
       setProcessingStep(4);
 
+      // Notify user if video was truncated
+      if (data.truncated) {
+        const coveredMins = data.segments.length > 0 ? Math.floor(data.segments[data.segments.length - 1].endTime / 60) : 0;
+        alert(`⚠️ Video quá dài — đã xử lý ${data.segments.length} câu (tương ứng ~${coveredMins} phút đầu). Tổng phụ đề gốc: ${data.totalMerged || '?'} câu.`);
+      }
+
       setTimeout(() => {
         setIsProcessing(false);
         setShowAddModal(false);

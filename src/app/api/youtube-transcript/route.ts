@@ -266,73 +266,113 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const targetSegments = mergedSegments.slice(0, 8);
-    console.log(`[Result] Merged into ${mergedSegments.length} sentences, using top ${targetSegments.length}`);
+    // ─── Apply safety cap (300 sentences max) with user notification ───
+    const MAX_SEGMENTS = 300;
+    let wasTruncated = false;
+    let targetSegments = mergedSegments;
+    if (mergedSegments.length > MAX_SEGMENTS) {
+      targetSegments = mergedSegments.slice(0, MAX_SEGMENTS);
+      wasTruncated = true;
+      const lastSeg = targetSegments[targetSegments.length - 1];
+      const coveredMinutes = Math.floor(lastSeg.end / 60);
+      console.log(`[Result] Video quá dài: ${mergedSegments.length} câu, cắt còn ${MAX_SEGMENTS} câu (~${coveredMinutes} phút đầu)`);
+    }
+    console.log(`[Result] Merged into ${mergedSegments.length} sentences, processing ${targetSegments.length}`);
 
-    // ─── Translate & generate IPA ───
-    const finalSegments: VideoSegment[] = [];
-    for (let idx = 0; idx < targetSegments.length; idx++) {
-      const seg = targetSegments[idx];
-      const translationVi = await safeTranslateToVietnamese(seg.text);
-      const ipa = convertSentenceToIpa(seg.text);
+    // ─── Translate & generate IPA (batch parallel, 10 concurrent) ───
+    const BATCH_SIZE = 10;
+    const finalSegments: VideoSegment[] = new Array(targetSegments.length);
+    const startTime = Date.now();
 
-      finalSegments.push({
-        id: `seg-${youtubeId}-${idx + 1}`,
-        videoId: youtubeId,
-        orderIndex: idx + 1,
-        startTime: seg.start,
-        endTime: seg.end,
-        textEn: seg.text,
-        ipa,
-        translationVi,
-      });
+    for (let batchStart = 0; batchStart < targetSegments.length; batchStart += BATCH_SIZE) {
+      const batchEnd = Math.min(batchStart + BATCH_SIZE, targetSegments.length);
+      const batchPromises = [];
+
+      for (let idx = batchStart; idx < batchEnd; idx++) {
+        batchPromises.push(
+          (async (i: number) => {
+            const seg = targetSegments[i];
+            const translationVi = await safeTranslateToVietnamese(seg.text);
+            const ipa = convertSentenceToIpa(seg.text);
+            finalSegments[i] = {
+              id: `seg-${youtubeId}-${i + 1}`,
+              videoId: youtubeId,
+              orderIndex: i + 1,
+              startTime: seg.start,
+              endTime: seg.end,
+              textEn: seg.text,
+              ipa,
+              translationVi,
+            };
+          })(idx)
+        );
+      }
+
+      await Promise.all(batchPromises);
     }
 
-    // ─── Generate Quizzes from real vocabulary ───
+    const processingMs = Date.now() - startTime;
+    console.log(`[Result] Translated ${finalSegments.length} segments in ${(processingMs / 1000).toFixed(1)}s`);
+
+    // ─── Generate Quizzes spread across the full video ───
     const finalQuizzes: VideoQuizQuestion[] = [];
     if (finalSegments.length > 0) {
-      const seg1 = finalSegments[0];
-      const words1 = seg1.textEn.split(/\s+/).filter((w) => w.length > 4);
-      const targetWord = words1[0] || 'English';
+      // Pick up to 6 quiz positions spread evenly across the video
+      const quizCount = Math.min(6, finalSegments.length);
+      const step = Math.max(1, Math.floor(finalSegments.length / quizCount));
+      const quizIndices: number[] = [];
+      for (let i = 0; i < finalSegments.length && quizIndices.length < quizCount; i += step) {
+        quizIndices.push(i);
+      }
 
-      finalQuizzes.push({
-        id: `quiz-${youtubeId}-1`,
-        videoId: youtubeId,
-        segmentId: seg1.id,
-        type: 'meaning',
-        question: `Trong lời thoại "#1: ${seg1.textEn.slice(0, 50)}...", từ "${targetWord}" có nghĩa là gì?`,
-        options: [
-          `Nghĩa đúng của từ "${targetWord}" trong ngữ cảnh`,
-          'Từ trái nghĩa không liên quan',
-          'Một từ vựng ngẫu nhiên khác',
-          'Phương án không chính xác',
-        ],
-        correctAnswerIndex: 0,
-        explanation: `Từ "${targetWord}" xuất hiện trong lời thoại thật của video tại mốc ${seg1.startTime}s.`,
-      });
+      for (let qi = 0; qi < quizIndices.length; qi++) {
+        const seg = finalSegments[quizIndices[qi]];
+        const words = seg.textEn.split(/\s+/).filter((w) => w.replace(/[^a-zA-Z]/g, '').length > 4);
+        if (words.length === 0) continue;
+        const targetWord = words[Math.floor(Math.random() * Math.min(words.length, 5))];
+        const cleanWord = targetWord.replace(/[^a-zA-Z]/g, '');
 
-      if (finalSegments.length > 1) {
-        const seg2 = finalSegments[1];
-        finalQuizzes.push({
-          id: `quiz-${youtubeId}-2`,
-          videoId: youtubeId,
-          segmentId: seg2.id,
-          type: 'fill-in-the-blank',
-          question: `Điền từ còn thiếu: "${seg2.textEn.replace(targetWord, '_______')}"`,
-          options: [targetWord, 'different', 'unknown', 'incorrect'],
-          correctAnswerIndex: 0,
-          explanation: `Đáp án đúng là "${targetWord}" theo lời thoại thật của video.`,
-        });
+        if (qi % 2 === 0) {
+          finalQuizzes.push({
+            id: `quiz-${youtubeId}-${qi + 1}`,
+            videoId: youtubeId,
+            segmentId: seg.id,
+            type: 'meaning',
+            question: `Tại mốc ${Math.floor(seg.startTime / 60)}:${String(seg.startTime % 60).padStart(2, '0')}, câu "${seg.textEn.slice(0, 60)}..." — từ "${cleanWord}" có nghĩa là gì?`,
+            options: [
+              `Nghĩa đúng của từ "${cleanWord}" trong ngữ cảnh`,
+              'Từ trái nghĩa không liên quan',
+              'Một từ vựng ngẫu nhiên khác',
+              'Phương án không chính xác',
+            ],
+            correctAnswerIndex: 0,
+            explanation: `Từ "${cleanWord}" xuất hiện trong lời thoại thật tại mốc ${Math.floor(seg.startTime / 60)}:${String(seg.startTime % 60).padStart(2, '0')}.`,
+          });
+        } else {
+          const blankedText = seg.textEn.replace(targetWord, '_______');
+          finalQuizzes.push({
+            id: `quiz-${youtubeId}-${qi + 1}`,
+            videoId: youtubeId,
+            segmentId: seg.id,
+            type: 'fill-in-the-blank',
+            question: `Điền từ còn thiếu (mốc ${Math.floor(seg.startTime / 60)}:${String(seg.startTime % 60).padStart(2, '0')}): "${blankedText.slice(0, 80)}..."`,
+            options: [cleanWord, 'different', 'unknown', 'incorrect'],
+            correctAnswerIndex: 0,
+            explanation: `Đáp án đúng là "${cleanWord}" theo lời thoại thật của video.`,
+          });
+        }
       }
     }
 
-    console.log(`[Result] ✓ Done! ${finalSegments.length} segments, ${finalQuizzes.length} quizzes`);
+    console.log(`[Result] ✓ Done! ${finalSegments.length} segments, ${finalQuizzes.length} quizzes, ${(processingMs / 1000).toFixed(1)}s`);
     console.log(`========== [YouTube Transcript] Completed ==========\n`);
 
     return NextResponse.json({
       success: true,
       segments: finalSegments,
       quizzes: finalQuizzes,
+      truncated: wasTruncated,
+      totalMerged: mergedSegments.length,
     });
   } catch (error: any) {
     console.error(`[YouTube Transcript] Unhandled error:`, error);
