@@ -1,0 +1,116 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: 'Inter', sans-serif;
+  
+  --color-primary: #6C5CE7;
+  --color-primary-light: #A29BFE;
+  --color-streak: #F97316;
+  --color-coin: #EAB308;
+  --color-mastered: #22C55E;
+  --color-total: #3B82F6;
+  
+  --color-bg-light: #F8F9FC;
+  --color-bg-dark: #0F0F23;
+  --color-card-light: #FFFFFF;
+  --color-card-dark: #1A1A2E;
+  --color-text-light: #1E1E2E;
+  --color-text-dark: #E8E8F0;
+
+  --animate-fade-in: fadeIn 0.3s ease-in-out;
+  --animate-slide-up: slideUp 0.4s ease-out;
+  --animate-flip-card: flipCard 0.6s ease-in-out;
+  --animate-bounce-in: bounceIn 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55);
+  --animate-pulse-glow: pulseGlow 2s infinite;
+  --animate-shimmer: shimmer 2s linear infinite;
+}
+
+:root {
+  --bg-color: var(--color-bg-light);
+  --text-color: var(--color-text-light);
+  --card-bg: var(--color-card-light);
+  --border-color: #E2E8F0;
+}
+
+html.dark {
+  --bg-color: var(--color-bg-dark);
+  --text-color: var(--color-text-dark);
+  --card-bg: var(--color-card-dark);
+  --border-color: #2D3748;
+}
+
+body {
+  background-color: var(--bg-color);
+  color: var(--text-color);
+  font-family: var(--font-sans);
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+html.dark ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes flipCard {
+  0% { transform: rotateY(0deg); }
+  100% { transform: rotateY(180deg); }
+}
+
+@keyframes bounceIn {
+  0% { transform: scale(0.3); opacity: 0; }
+  50% { transform: scale(1.05); opacity: 1; }
+  70% { transform: scale(0.9); }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes pulseGlow {
+  0%, 100% { box-shadow: 0 0 10px rgba(108, 92, 231, 0.5); }
+  50% { box-shadow: 0 0 20px rgba(108, 92, 231, 0.8); }
+}
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+
+.glass {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+html.dark .glass {
+  background: rgba(26, 26, 46, 0.7);
+  backdrop-filter: blur(10px);
+}
+
+.card-style {
+  background-color: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 0.75rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+}
