@@ -76,6 +76,7 @@ interface AppState {
   videoQuizzes: Record<string, VideoQuizQuestion[]>;
   addVideo: (video: Omit<VideoItem, 'id' | 'createdAt' | 'completedSegmentsCount'>) => string;
   updateVideoProgress: (videoId: string, completedCount: number) => void;
+  deleteVideo: (videoId: string) => void;
   shadowingAttempts: ShadowingAttempt[];
   addShadowingAttempt: (attempt: Omit<ShadowingAttempt, 'id' | 'createdAt'>) => void;
 
@@ -579,6 +580,20 @@ export const useAppStore = create<AppState>()(
             v.id === videoId ? { ...v, completedSegmentsCount: completedCount } : v
           ),
         }));
+      },
+      deleteVideo: (videoId) => {
+        set((state) => {
+          const newVideos = (state.videos || []).filter((v) => v.id !== videoId);
+          const newSegments = { ...(state.videoSegments || {}) };
+          delete newSegments[videoId];
+          const newQuizzes = { ...(state.videoQuizzes || {}) };
+          delete newQuizzes[videoId];
+          return {
+            videos: newVideos,
+            videoSegments: newSegments,
+            videoQuizzes: newQuizzes,
+          };
+        });
       },
 
       shadowingAttempts: [],

@@ -3,6 +3,9 @@ import { YoutubeTranscript } from 'youtube-transcript';
 import { convertSentenceToIpa } from '@/lib/ipa-generator';
 import { VideoSegment, VideoQuizQuestion } from '@/lib/types';
 
+// Allow up to 300s for long videos (Vercel Pro). Hobby plan caps at 60s.
+export const maxDuration = 300;
+
 function decodeHtmlEntities(str: string): string {
   return str
     .replace(/&amp;/g, '&')
@@ -17,31 +20,96 @@ function decodeHtmlEntities(str: string): string {
     .trim();
 }
 
+export function cleanSubtitleText(raw: string): string {
+  if (!raw) return '';
+  let text = decodeHtmlEntities(raw);
+
+  // 1. Remove music symbols (♪, ♫, ♬, ♩)
+  text = text.replace(/[♪♫♬♩]+/g, ' ');
+
+  // 2. Remove speaker transition markers like ">>", ">>>", "> "
+  text = text.replace(/^>+\s*/gm, ' ').replace(/\s+>+\s+/g, ' ');
+
+  // 3. Remove sound annotations in square brackets: [Music], [Applause], [Laughter], [RINGING SOUND]...
+  text = text.replace(/\[\s*(music|applause|laughter|cheering|silence|snicker|gasp|sigh|singing|sound|audio|inaudible|crosstalk|crying|cough|groan|groaning|screaming|screams|chuckle|chuckles|bell|ringing|beep|whispering|whispers)[^\]]*\]/gi, ' ');
+  text = text.replace(/\[[\s♪♫♬♩\-_.:*]*\]/g, ' ');
+  text = text.replace(/\[[A-Z\s_0-9]+ SOUND[S]?\]/gi, ' ');
+  text = text.replace(/\[\s*[^\]]*music[^\]]*\]/gi, ' ');
+
+  // 4. Remove sound annotations in parentheses: (Music), (Applause), (Laughter)...
+  text = text.replace(/\(\s*(music|applause|laughter|cheering|silence|gasp|sigh|singing|sound|audio|inaudible|chuckle)[^\)]*\)/gi, ' ');
+  text = text.replace(/\(\s*[^)]*music[^)]*\)/gi, ' ');
+
+  // 5. Remove asterisks cues: *laughter*, *music*, *applause*
+  text = text.replace(/\*\s*(music|applause|laughter|cheering|cough|sigh)\s*\*/gi, ' ');
+
+  // 6. Clean up excessive whitespace, double spaces, leading/trailing punctuation
+  text = text
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,.:;!?-]+/, '')
+    .replace(/[\s,;]+$/, '')
+    .trim();
+
+  return text;
+}
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+// Track fallback count globally per request
+let translateFallbackCount = 0;
+
 async function safeTranslateToVietnamese(text: string): Promise<string> {
-  try {
-    const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(text)}`;
-    const res = await fetch(url, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
-      },
-    });
-    if (!res.ok) {
-      console.log(`[Translate] HTTP ${res.status} for: "${text.slice(0, 50)}..."`);
+  const MAX_RETRIES = 2;
+  const url = `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(text)}`;
+
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    try {
+      const res = await fetch(url, {
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36',
+        },
+      });
+
+      if (res.status === 429 || res.status === 503) {
+        // Rate-limited or overloaded — backoff and retry
+        const delayMs = 1000 * (attempt + 1); // 1s, 2s, 3s
+        console.log(`[Translate] Rate-limited (HTTP ${res.status}), retry ${attempt + 1}/${MAX_RETRIES} after ${delayMs}ms`);
+        await sleep(delayMs);
+        continue;
+      }
+
+      if (!res.ok) {
+        console.log(`[Translate] HTTP ${res.status} for: "${text.slice(0, 50)}..."`);
+        translateFallbackCount++;
+        return text;
+      }
+
+      const rawText = await res.text();
+      if (!rawText || !rawText.trim().startsWith('[')) {
+        translateFallbackCount++;
+        return text;
+      }
+
+      const data = JSON.parse(rawText);
+      if (data?.[0] && Array.isArray(data[0])) {
+        return data[0].map((t: any) => t?.[0] || '').join('');
+      }
+      translateFallbackCount++;
+      return text;
+    } catch (err: any) {
+      if (attempt < MAX_RETRIES) {
+        await sleep(500 * (attempt + 1));
+        continue;
+      }
+      console.log(`[Translate] Error after ${MAX_RETRIES + 1} attempts: ${err.message}`);
+      translateFallbackCount++;
       return text;
     }
-    const rawText = await res.text();
-    if (!rawText || !rawText.trim().startsWith('[')) {
-      return text;
-    }
-    const data = JSON.parse(rawText);
-    if (data?.[0] && Array.isArray(data[0])) {
-      return data[0].map((t: any) => t?.[0] || '').join('');
-    }
-    return text;
-  } catch (err: any) {
-    console.log(`[Translate] Error: ${err.message}`);
-    return text;
   }
+  translateFallbackCount++;
+  return text;
 }
 
 export async function POST(req: NextRequest) {
@@ -239,7 +307,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    // ─── Merge micro-fragments into natural sentences ───
+    // ─── Merge micro-fragments into natural sentences (filtering music/sound cues) ───
     const mergedSegments: { start: number; end: number; text: string }[] = [];
     let currentText = '';
     let currentStart = rawSegments[0].start;
@@ -247,27 +315,33 @@ export async function POST(req: NextRequest) {
 
     for (let i = 0; i < rawSegments.length; i++) {
       const seg = rawSegments[i];
+      const cleaned = cleanSubtitleText(seg.text);
+      if (!cleaned) continue; // Skip pure music / sound cues like [Music], [Applause], ♪
+
       if (!currentText) {
         currentStart = seg.start;
       }
-      currentText += (currentText ? ' ' : '') + seg.text;
+      currentText += (currentText ? ' ' : '') + cleaned;
       currentEnd = seg.start + seg.duration;
 
       const wordCount = currentText.split(/\s+/).length;
       const hasPunctuation = /[.!?]$/.test(currentText);
 
       if (hasPunctuation || wordCount >= 8 || i === rawSegments.length - 1) {
-        mergedSegments.push({
-          start: currentStart,
-          end: Math.max(currentStart + 3, currentEnd),
-          text: currentText.trim(),
-        });
+        const finalized = cleanSubtitleText(currentText);
+        if (finalized && finalized.length > 1) {
+          mergedSegments.push({
+            start: currentStart,
+            end: Math.max(currentStart + 3, currentEnd),
+            text: finalized,
+          });
+        }
         currentText = '';
       }
     }
 
-    // ─── Apply safety cap (300 sentences max) with user notification ───
-    const MAX_SEGMENTS = 300;
+    // ─── Apply safety cap (1000 sentences max) with user notification ───
+    const MAX_SEGMENTS = 1000;
     let wasTruncated = false;
     let targetSegments = mergedSegments;
     if (mergedSegments.length > MAX_SEGMENTS) {
@@ -275,14 +349,16 @@ export async function POST(req: NextRequest) {
       wasTruncated = true;
       const lastSeg = targetSegments[targetSegments.length - 1];
       const coveredMinutes = Math.floor(lastSeg.end / 60);
-      console.log(`[Result] Video quá dài: ${mergedSegments.length} câu, cắt còn ${MAX_SEGMENTS} câu (~${coveredMinutes} phút đầu)`);
+      console.log(`[Result] Video cực dài: ${mergedSegments.length} câu, cắt còn ${MAX_SEGMENTS} câu (~${coveredMinutes} phút đầu)`);
     }
     console.log(`[Result] Merged into ${mergedSegments.length} sentences, processing ${targetSegments.length}`);
 
-    // ─── Translate & generate IPA (batch parallel, 10 concurrent) ───
-    const BATCH_SIZE = 10;
+    // ─── Translate & generate IPA (batch parallel, 5 concurrent + delay between batches) ───
+    const BATCH_SIZE = 5;
+    const BATCH_DELAY_MS = 200; // 200ms delay between batches to avoid rate-limit
     const finalSegments: VideoSegment[] = new Array(targetSegments.length);
     const startTime = Date.now();
+    translateFallbackCount = 0; // Reset counter for this request
 
     for (let batchStart = 0; batchStart < targetSegments.length; batchStart += BATCH_SIZE) {
       const batchEnd = Math.min(batchStart + BATCH_SIZE, targetSegments.length);
@@ -309,10 +385,21 @@ export async function POST(req: NextRequest) {
       }
 
       await Promise.all(batchPromises);
+
+      // Log progress every 50 segments
+      if (batchEnd % 50 === 0 || batchEnd === targetSegments.length) {
+        const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+        console.log(`[Progress] Translated ${batchEnd}/${targetSegments.length} segments (${elapsed}s elapsed, ${translateFallbackCount} fallbacks)`);
+      }
+
+      // Small delay between batches to avoid Google Translate rate-limit
+      if (batchEnd < targetSegments.length) {
+        await sleep(BATCH_DELAY_MS);
+      }
     }
 
     const processingMs = Date.now() - startTime;
-    console.log(`[Result] Translated ${finalSegments.length} segments in ${(processingMs / 1000).toFixed(1)}s`);
+    console.log(`[Result] Translated ${finalSegments.length} segments in ${(processingMs / 1000).toFixed(1)}s (${translateFallbackCount} fallbacks)`);
 
     // ─── Generate Quizzes spread across the full video ───
     const finalQuizzes: VideoQuizQuestion[] = [];

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAppStore } from '@/lib/store';
@@ -17,17 +17,24 @@ import {
   Loader2,
   X,
   Layers,
-  Award
+  Award,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 export default function VideoHubPage() {
   const router = useRouter();
-  const { videos, addVideo } = useAppStore();
+  const { videos, addVideo, deleteVideo } = useAppStore();
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedLevel, setSelectedLevel] = useState<string>('all');
   const [showAddModal, setShowAddModal] = useState(false);
+
+  const handleDeleteVideo = (id: string, title: string) => {
+    if (window.confirm(`Bạn có chắc chắn muốn xóa bài học video:\n"${title}"?\n\nDữ liệu các câu phụ đề và tiến trình học của video này sẽ được xóa bỏ.`)) {
+      deleteVideo(id);
+    }
+  };
 
   // Modal State
   const [addMode, setAddMode] = useState<'youtube' | 'upload'>('youtube');
@@ -35,12 +42,24 @@ export default function VideoHubPage() {
   const [videoTitle, setVideoTitle] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
   const [processingStep, setProcessingStep] = useState(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  useEffect(() => {
+    let timer: any;
+    if (isProcessing) {
+      setElapsedSeconds(0);
+      timer = setInterval(() => {
+        setElapsedSeconds((prev) => prev + 1);
+      }, 1000);
+    }
+    return () => clearInterval(timer);
+  }, [isProcessing]);
 
   const processingSteps = [
     'Đang kết nối & tải dữ liệu video...',
-    'Đang tách âm thanh & chạy Speech-to-Text...',
-    'Đang tách câu theo mốc thời gian...',
-    'Đang khởi tạo phiên âm IPA & dịch nghĩa...',
+    'Đang tách lời thoại theo mốc thời gian...',
+    'Đang dịch nghĩa tiếng Việt & tạo phiên âm IPA (toàn bộ video)...',
+    'Đang sinh câu hỏi Quiz & lưu bài học...',
     'Hoàn tất!'
   ];
 
@@ -297,6 +316,20 @@ export default function VideoHubPage() {
                 <div className="absolute top-3 left-3 bg-white/90 dark:bg-gray-900/90 backdrop-blur-md text-gray-900 dark:text-white text-xs font-bold px-3 py-1 rounded-full shadow-sm">
                   {video.level}
                 </div>
+
+                {/* Delete Button on Thumbnail */}
+                <button
+                  type="button"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    handleDeleteVideo(video.id, video.title);
+                  }}
+                  title="Xóa video này"
+                  className="absolute top-3 right-3 w-8 h-8 bg-red-500/80 hover:bg-red-600 text-white rounded-full flex items-center justify-center backdrop-blur-md shadow-md transition-all hover:scale-110 cursor-pointer z-10 opacity-80 group-hover:opacity-100"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
               </div>
 
               {/* Card Body */}
@@ -325,13 +358,24 @@ export default function VideoHubPage() {
                     />
                   </div>
 
-                  <Link
-                    href={`/video/${video.id}`}
-                    className="mt-4 w-full bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer text-sm"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    Học video này
-                  </Link>
+                  <div className="mt-4 flex items-center gap-2">
+                    <Link
+                      href={`/video/${video.id}`}
+                      className="flex-1 bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 transition-all cursor-pointer text-sm shadow-sm"
+                    >
+                      <Play className="w-4 h-4 fill-current" />
+                      Học video này
+                    </Link>
+
+                    <button
+                      type="button"
+                      onClick={() => handleDeleteVideo(video.id, video.title)}
+                      title="Xóa video này"
+                      className="p-3 bg-red-50 dark:bg-red-950/30 text-red-500 hover:bg-red-500 hover:text-white rounded-2xl border border-red-100 dark:border-red-900/40 transition-all cursor-pointer shadow-sm hover:scale-105"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -374,6 +418,11 @@ export default function VideoHubPage() {
                       className="bg-primary h-2 rounded-full transition-all duration-300"
                       style={{ width: `${((processingStep + 1) / processingSteps.length) * 100}%` }}
                     />
+                  </div>
+
+                  <div className="pt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1 max-w-sm mx-auto">
+                    <p className="font-semibold text-primary/80">⏱️ Thời gian đã chạy: {elapsedSeconds} giây</p>
+                    <p>Hệ thống đang dịch toàn bộ lời thoại và sinh phiên âm IPA cho cả video. Với video dài (15–20 phút), quá trình xử lý mất khoảng 20–40 giây.</p>
                   </div>
                 </div>
               ) : (

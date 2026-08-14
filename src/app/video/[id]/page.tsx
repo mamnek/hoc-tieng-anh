@@ -28,9 +28,36 @@ import {
   Award,
   Check,
   Zap,
-  CheckCircle
+  CheckCircle,
+  Trash2
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
+
+declare global {
+  interface Window {
+    YT: any;
+    onYouTubeIframeAPIReady: any;
+  }
+}
+
+function cleanDisplaySentence(raw: string): string {
+  if (!raw) return '';
+  return raw
+    .replace(/[♪♫♬♩]+/g, ' ')
+    .replace(/^>+\s*/gm, ' ')
+    .replace(/\s+>+\s+/g, ' ')
+    .replace(/\[\s*(music|applause|laughter|cheering|silence|snicker|gasp|sigh|singing|sound|audio|inaudible|crosstalk|crying|cough|groan|groaning|screaming|screams|chuckle|chuckles|bell|ringing|beep|whispering|whispers)[^\]]*\]/gi, ' ')
+    .replace(/\[[\s♪♫♬♩\-_.:*]*\]/g, ' ')
+    .replace(/\[[A-Z\s_0-9]+ SOUND[S]?\]/gi, ' ')
+    .replace(/\[\s*[^\]]*music[^\]]*\]/gi, ' ')
+    .replace(/\(\s*(music|applause|laughter|cheering|silence|gasp|sigh|singing|sound|audio|inaudible|chuckle)[^\)]*\)/gi, ' ')
+    .replace(/\(\s*[^)]*music[^)]*\)/gi, ' ')
+    .replace(/\*\s*(music|applause|laughter|cheering|cough|sigh)\s*\*/gi, ' ')
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,.:;!?-]+/, '')
+    .replace(/[\s,;]+$/, '')
+    .trim();
+}
 
 function VideoStudioContent() {
   const params = useParams();
@@ -42,6 +69,7 @@ function VideoStudioContent() {
     words,
     addWords,
     updateVideoProgress,
+    deleteVideo,
     addShadowingAttempt,
     videoSegments: videoSegmentsStore,
     videoQuizzes: videoQuizzesStore,
@@ -93,6 +121,12 @@ function VideoStudioContent() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
 
+  // YouTube Player and Synchronization Refs
+  const playerRef = useRef<any>(null);
+  const timePollingIntervalRef = useRef<any>(null);
+  const activeSegmentItemRef = useRef<HTMLDivElement | null>(null);
+  const transcriptContainerRef = useRef<HTMLDivElement | null>(null);
+
   // Dictation State
   const [dictationInput, setDictationInput] = useState('');
   const [dictationResult, setDictationResult] = useState<{
@@ -108,6 +142,167 @@ function VideoStudioContent() {
   const [quizFinished, setQuizFinished] = useState(false);
 
   const currentSegment = segments[activeSegmentIndex] || segments[0];
+
+  // Stop polling helper
+  const stopTimePolling = () => {
+    if (timePollingIntervalRef.current) {
+      clearInterval(timePollingIntervalRef.current);
+      timePollingIntervalRef.current = null;
+    }
+  };
+
+  // Start polling playback time every 200ms
+  const startTimePolling = () => {
+    stopTimePolling();
+    timePollingIntervalRef.current = setInterval(() => {
+      if (!playerRef.current?.getCurrentTime) return;
+      try {
+        const currentTime = playerRef.current.getCurrentTime();
+        if (typeof currentTime !== 'number' || isNaN(currentTime)) return;
+
+        // Find matching segment based on currentTime
+        const idx = segments.findIndex(
+          (s) => currentTime >= s.startTime && currentTime <= s.endTime
+        );
+
+        if (idx !== -1) {
+          setActiveSegmentIndex((prev) => (prev !== idx ? idx : prev));
+        } else {
+          // If in a small pause between segments, find latest passed segment
+          let lastPassed = -1;
+          for (let i = 0; i < segments.length; i++) {
+            if (currentTime >= segments[i].startTime) {
+              lastPassed = i;
+            } else {
+              break;
+            }
+          }
+          if (lastPassed !== -1) {
+            setActiveSegmentIndex((prev) => (prev !== lastPassed ? lastPassed : prev));
+          }
+        }
+      } catch (err) {}
+    }, 200);
+  };
+
+  // Initialize YouTube IFrame Player API
+  useEffect(() => {
+    if (!video || video.sourceType !== 'youtube' || !video.youtubeId) return;
+
+    let isMounted = true;
+
+    const initPlayer = () => {
+      if (!window.YT || !window.YT.Player) return;
+      if (!isMounted) return;
+
+      if (playerRef.current?.destroy) {
+        try { playerRef.current.destroy(); } catch (e) {}
+      }
+
+      try {
+        playerRef.current = new window.YT.Player('youtube-player-element', {
+          videoId: video.youtubeId,
+          playerVars: {
+            autoplay: 0,
+            controls: 1,
+            rel: 0,
+            modestbranding: 1,
+            enablejsapi: 1,
+            start: segments[0]?.startTime || 0,
+          },
+          events: {
+            onReady: (event: any) => {
+              try { event.target.setPlaybackRate(playbackRate); } catch (e) {}
+            },
+            onStateChange: (event: any) => {
+              // 1 = PLAYING
+              if (event.data === 1) {
+                startTimePolling();
+              } else {
+                stopTimePolling();
+              }
+            },
+          },
+        });
+      } catch (err) {
+        console.error('Failed to init YT.Player:', err);
+      }
+    };
+
+    if (!window.YT || !window.YT.Player) {
+      const existingScript = document.getElementById('yt-iframe-api-script');
+      if (!existingScript) {
+        const tag = document.createElement('script');
+        tag.id = 'yt-iframe-api-script';
+        tag.src = 'https://www.youtube.com/iframe_api';
+        const firstScriptTag = document.getElementsByTagName('script')[0];
+        firstScriptTag?.parentNode?.insertBefore(tag, firstScriptTag);
+      }
+      
+      const prevCallback = window.onYouTubeIframeAPIReady;
+      window.onYouTubeIframeAPIReady = () => {
+        if (prevCallback) prevCallback();
+        initPlayer();
+      };
+    } else {
+      initPlayer();
+    }
+
+    return () => {
+      isMounted = false;
+      stopTimePolling();
+      if (playerRef.current?.destroy) {
+        try { playerRef.current.destroy(); } catch (e) {}
+      }
+    };
+  }, [video?.youtubeId]);
+
+  // Seek and play specific segment
+  const seekToSegment = (idx: number, autoPlay: boolean = true) => {
+    if (idx < 0 || idx >= segments.length) return;
+    const target = segments[idx];
+    setActiveSegmentIndex(idx);
+
+    if (playerRef.current?.seekTo) {
+      try {
+        playerRef.current.seekTo(target.startTime, true);
+        if (autoPlay && playerRef.current.playVideo) {
+          playerRef.current.playVideo();
+        }
+      } catch (err) {}
+    }
+  };
+
+  // Change playback speed
+  const handlePlaybackRateChange = (rate: number) => {
+    setPlaybackRate(rate);
+    if (playerRef.current?.setPlaybackRate) {
+      try {
+        playerRef.current.setPlaybackRate(rate);
+      } catch (e) {}
+    }
+  };
+
+  // Auto scroll active segment ONLY INSIDE the transcript box, NEVER scrolling the main browser window/page
+  useEffect(() => {
+    const container = transcriptContainerRef.current;
+    const item = activeSegmentItemRef.current;
+    if (!container || !item) return;
+
+    try {
+      const containerRect = container.getBoundingClientRect();
+      const itemRect = item.getBoundingClientRect();
+
+      // If active item is outside visible boundaries of the transcript box
+      if (itemRect.top < containerRect.top || itemRect.bottom > containerRect.bottom) {
+        const offsetTop = item.offsetTop - container.offsetTop;
+        container.scrollTo({
+          top: Math.max(0, offsetTop - 20),
+          behavior: 'smooth',
+        });
+      }
+    } catch (err) {}
+  }, [activeSegmentIndex]);
 
   // Speech Synthesis helper
   const speakText = (text: string) => {
@@ -241,7 +436,8 @@ function VideoStudioContent() {
 
   // Shadowing Speech Evaluation & Word Diff Scoring
   const evaluateShadowing = () => {
-    const targetWords = currentSegment.textEn.replace(/[^a-zA-Z\s]/g, '').split(/\s+/);
+    const cleanText = cleanDisplaySentence(currentSegment.textEn);
+    const targetWords = cleanText.replace(/[^a-zA-Z\s]/g, '').split(/\s+/).filter(Boolean);
     // Simulate high-accuracy shadowing result
     const score = Math.floor(Math.random() * 20) + 80; // 80% - 99%
     setShadowingScore(score);
@@ -256,7 +452,7 @@ function VideoStudioContent() {
     addShadowingAttempt({
       userId: 'user-1',
       segmentId: currentSegment.id,
-      recognizedText: currentSegment.textEn,
+      recognizedText: cleanText,
       accuracyScore: score,
       wordDiffs: diffs,
     });
@@ -268,8 +464,9 @@ function VideoStudioContent() {
   // Dictation Check Logic
   const handleCheckDictation = () => {
     if (!dictationInput.trim()) return;
-    const targetWords = currentSegment.textEn.toLowerCase().replace(/[^a-zA-Z\s]/g, '').split(/\s+/);
-    const inputWords = dictationInput.toLowerCase().replace(/[^a-zA-Z\s]/g, '').split(/\s+/);
+    const cleanText = cleanDisplaySentence(currentSegment.textEn);
+    const targetWords = cleanText.toLowerCase().replace(/[^a-zA-Z\s]/g, '').split(/\s+/).filter(Boolean);
+    const inputWords = dictationInput.toLowerCase().replace(/[^a-zA-Z\s]/g, '').split(/\s+/).filter(Boolean);
 
     let matchCount = 0;
     const wordDiffs = targetWords.map((targetW, idx) => {
@@ -281,7 +478,7 @@ function VideoStudioContent() {
       };
     });
 
-    const accuracy = Math.round((matchCount / targetWords.length) * 100);
+    const accuracy = targetWords.length > 0 ? Math.round((matchCount / targetWords.length) * 100) : 100;
     setDictationResult({
       checked: true,
       accuracy,
@@ -341,12 +538,27 @@ function VideoStudioContent() {
           </div>
         </div>
 
-        <button
-          onClick={() => router.push('/video')}
-          className="bg-primary hover:bg-primary/90 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-sm cursor-pointer"
-        >
-          Kết thúc bài
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => {
+              if (window.confirm(`Bạn có chắc chắn muốn xóa bài học video:\n"${video.title}"?\n\nDữ liệu các câu phụ đề và tiến trình học sẽ bị xóa bỏ.`)) {
+                deleteVideo(video.id);
+                router.push('/video');
+              }
+            }}
+            className="bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-600 dark:text-red-400 font-bold px-3.5 py-2 rounded-xl text-sm transition-all border border-red-200 dark:border-red-800/50 flex items-center gap-1.5 cursor-pointer shadow-sm"
+            title="Xóa video này"
+          >
+            <Trash2 className="w-4 h-4" />
+            Xóa video
+          </button>
+          <button
+            onClick={() => router.push('/video')}
+            className="bg-primary hover:bg-primary/90 text-white font-bold px-4 py-2 rounded-xl text-sm transition-all shadow-sm cursor-pointer"
+          >
+            Kết thúc bài
+          </button>
+        </div>
       </div>
 
       {/* 2-Column Main Studio Layout */}
@@ -357,17 +569,22 @@ function VideoStudioContent() {
           <div className="bg-black rounded-3xl overflow-hidden shadow-2xl border border-gray-800 relative">
             <div className="aspect-video relative">
               {video.sourceType === 'youtube' && video.youtubeId ? (
-                <iframe
-                  src={`https://www.youtube.com/embed/${video.youtubeId}?enablejsapi=1&autoplay=0&start=${currentSegment.startTime}`}
-                  title={video.title}
-                  className="w-full h-full border-0"
-                  allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                  allowFullScreen
-                />
+                <div className="w-full h-full flex items-center justify-center bg-black">
+                  <div id="youtube-player-element" className="w-full h-full" />
+                </div>
               ) : (
                 <video
                   src={video.videoUrl || 'https://www.w3schools.com/html/mov_bbb.mp4'}
                   controls
+                  onTimeUpdate={(e) => {
+                    const currentTime = (e.target as HTMLVideoElement).currentTime;
+                    const idx = segments.findIndex(
+                      (s) => currentTime >= s.startTime && currentTime <= s.endTime
+                    );
+                    if (idx !== -1 && idx !== activeSegmentIndex) {
+                      setActiveSegmentIndex(idx);
+                    }
+                  }}
                   className="w-full h-full"
                 />
               )}
@@ -375,10 +592,10 @@ function VideoStudioContent() {
               {/* On-Video Subtitle Overlay */}
               {showSubtitlesOnVideo && (
                 <div className="absolute bottom-4 inset-x-4 pointer-events-none text-center">
-                  <div className="inline-block bg-black/80 backdrop-blur-md text-white font-bold text-base md:text-lg px-4 py-2 rounded-2xl shadow-xl max-w-xl">
-                    <p>{currentSegment.textEn}</p>
+                  <div className="inline-block bg-black/85 backdrop-blur-md text-white font-bold text-sm md:text-base lg:text-lg px-4 py-2 rounded-2xl shadow-2xl max-w-xl border border-white/10 transition-all duration-300">
+                    <p className="leading-snug">{cleanDisplaySentence(currentSegment.textEn)}</p>
                     {showTranslation && (
-                      <p className="text-yellow-300 text-xs md:text-sm font-normal mt-0.5">
+                      <p className="text-yellow-300 text-xs md:text-sm font-medium mt-1 leading-snug">
                         {currentSegment.translationVi}
                       </p>
                     )}
@@ -394,7 +611,7 @@ function VideoStudioContent() {
                 {[0.5, 0.75, 1, 1.25, 1.5].map((rate) => (
                   <button
                     key={rate}
-                    onClick={() => setPlaybackRate(rate)}
+                    onClick={() => handlePlaybackRateChange(rate)}
                     className={cn(
                       'px-2 py-1 rounded-md transition-colors cursor-pointer',
                       playbackRate === rate ? 'bg-primary text-white font-bold' : 'hover:bg-gray-800 text-gray-300'
@@ -436,17 +653,18 @@ function VideoStudioContent() {
               Danh sách câu phụ đề ({segments.length} câu)
             </h3>
 
-            <div className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
+            <div ref={transcriptContainerRef} className="space-y-3 max-h-[380px] overflow-y-auto pr-1">
               {segments.map((seg, idx) => {
                 const isActive = idx === activeSegmentIndex;
                 return (
                   <div
                     key={seg.id}
-                    onClick={() => setActiveSegmentIndex(idx)}
+                    ref={isActive ? activeSegmentItemRef : null}
+                    onClick={() => seekToSegment(idx)}
                     className={cn(
                       'p-4 rounded-2xl border transition-all cursor-pointer text-left',
                       isActive
-                        ? 'border-primary bg-primary/5 dark:bg-primary/10 shadow-md'
+                        ? 'border-primary bg-primary/10 dark:bg-primary/20 shadow-md ring-2 ring-primary/40'
                         : 'border-gray-100 dark:border-gray-700/60 hover:bg-gray-50 dark:hover:bg-gray-700/30'
                     )}
                   >
@@ -460,7 +678,7 @@ function VideoStudioContent() {
                     </div>
 
                     <p className="font-bold text-sm text-gray-900 dark:text-white mb-1">
-                      {seg.textEn}
+                      {cleanDisplaySentence(seg.textEn)}
                     </p>
 
                     {showIpa && (
@@ -536,7 +754,7 @@ function VideoStudioContent() {
                     Câu #{currentSegment.orderIndex} / {segments.length}
                   </span>
                   <button
-                    onClick={() => speakText(currentSegment.textEn)}
+                    onClick={() => speakText(cleanDisplaySentence(currentSegment.textEn))}
                     className="flex items-center gap-1 text-xs font-bold text-primary bg-primary/10 hover:bg-primary/20 px-3 py-1.5 rounded-xl transition-colors cursor-pointer"
                   >
                     <Volume2 className="w-4 h-4" /> Nghe mẫu
@@ -546,7 +764,7 @@ function VideoStudioContent() {
                 {/* Interactive Clickable Words */}
                 {activeTab === 'shadowing' ? (
                   <div className="flex flex-wrap gap-1.5 text-lg font-black text-gray-900 dark:text-white leading-relaxed">
-                    {currentSegment.textEn.split(' ').map((word, wIdx) => (
+                    {cleanDisplaySentence(currentSegment.textEn).split(' ').filter(Boolean).map((word, wIdx) => (
                       <span
                         key={wIdx}
                         onClick={() => handleWordClick(word)}
@@ -789,7 +1007,7 @@ function VideoStudioContent() {
             {/* Bottom Segment Navigation Buttons */}
             <div className="flex items-center justify-between pt-6 border-t border-gray-100 dark:border-gray-700 mt-auto gap-3">
               <button
-                onClick={() => setActiveSegmentIndex((p) => Math.max(0, p - 1))}
+                onClick={() => seekToSegment(Math.max(0, activeSegmentIndex - 1))}
                 disabled={activeSegmentIndex === 0}
                 className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 disabled:opacity-40 rounded-2xl text-xs font-bold text-gray-700 dark:text-gray-200 transition-colors flex items-center justify-center gap-1 cursor-pointer"
               >
@@ -797,15 +1015,15 @@ function VideoStudioContent() {
               </button>
 
               <button
-                onClick={() => speakText(currentSegment.textEn)}
+                onClick={() => seekToSegment(activeSegmentIndex)}
                 className="py-3 px-4 bg-primary/10 hover:bg-primary/20 text-primary rounded-2xl text-xs font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
-                title="Nghe lại câu hiện tại"
+                title="Nghe lại câu hiện tại trong video"
               >
                 <RotateCcw className="w-4 h-4" /> Nghe lại
               </button>
 
               <button
-                onClick={() => setActiveSegmentIndex((p) => Math.min(segments.length - 1, p + 1))}
+                onClick={() => seekToSegment(Math.min(segments.length - 1, activeSegmentIndex + 1))}
                 disabled={activeSegmentIndex === segments.length - 1}
                 className="flex-1 py-3 bg-primary hover:bg-primary/90 disabled:opacity-40 text-white rounded-2xl text-xs font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer shadow-md"
               >
