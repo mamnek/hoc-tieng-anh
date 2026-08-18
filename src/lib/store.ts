@@ -14,9 +14,13 @@ import {
   VideoSegment,
   VideoQuizQuestion,
   ShadowingAttempt,
+  SpeakingQuestionSet,
+  SpeakingAttempt,
+  SpeakingErrorReport,
 } from './types';
 import { presetWordSets, presetWords } from './preset-data';
 import { presetVideos, presetVideoSegments, presetVideoQuizzes } from './preset-videos';
+import { presetSpeakingSets } from './preset-speaking';
 import { calculateNextReview } from './srs';
 import { generateId } from './utils';
 
@@ -79,6 +83,13 @@ interface AppState {
   deleteVideo: (videoId: string) => void;
   shadowingAttempts: ShadowingAttempt[];
   addShadowingAttempt: (attempt: Omit<ShadowingAttempt, 'id' | 'createdAt'>) => void;
+
+  // IELTS Speaking
+  speakingQuestionSets: SpeakingQuestionSet[];
+  speakingAttempts: SpeakingAttempt[];
+  speakingErrorReports: SpeakingErrorReport[];
+  addSpeakingAttempt: (attempt: Omit<SpeakingAttempt, 'id' | 'createdAt'>) => string;
+  addSpeakingErrorReport: (report: Omit<SpeakingErrorReport, 'id' | 'createdAt'>) => void;
 
   // Dark Mode
   isDarkMode: boolean;
@@ -608,6 +619,47 @@ export const useAppStore = create<AppState>()(
         }));
       },
 
+      // IELTS Speaking
+      speakingQuestionSets: [...presetSpeakingSets],
+      speakingAttempts: [],
+      speakingErrorReports: [],
+      addSpeakingAttempt: (attemptData) => {
+        const id = generateId();
+        const newAttempt: SpeakingAttempt = {
+          ...attemptData,
+          id,
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => {
+          const earnedCoins = attemptData.mode === 'full_mock' ? 30 : 10;
+          const currentUser = state.currentUser
+            ? { ...state.currentUser, coins: (state.currentUser.coins || 0) + earnedCoins }
+            : null;
+          const updatedUsers = state.currentUser && currentUser
+            ? state.users.map((u) => (u.id === currentUser.id ? currentUser : u))
+            : state.users;
+          return {
+            speakingAttempts: [newAttempt, ...(state.speakingAttempts || [])],
+            currentUser,
+            user: currentUser || state.user,
+            users: updatedUsers,
+          };
+        });
+        get().checkAndUpdateStreak();
+        get().recordActivity();
+        return id;
+      },
+      addSpeakingErrorReport: (reportData) => {
+        const report: SpeakingErrorReport = {
+          ...reportData,
+          id: generateId(),
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          speakingErrorReports: [report, ...(state.speakingErrorReports || [])],
+        }));
+      },
+
       // Dark Mode
       isDarkMode: false,
       toggleDarkMode: () =>
@@ -681,6 +733,13 @@ export const useAppStore = create<AppState>()(
             }
           });
           state.videoQuizzes = updatedQuizzes;
+
+          // Ensure speaking question sets exist
+          const existingSpeakingIds = new Set((state.speakingQuestionSets || []).map((s) => s.id));
+          const missingSpeakingSets = presetSpeakingSets.filter((ps) => !existingSpeakingIds.has(ps.id));
+          if (missingSpeakingSets.length > 0) {
+            state.speakingQuestionSets = [...(state.speakingQuestionSets || []), ...missingSpeakingSets];
+          }
 
           // Recalculate word counts for all sets
           state.wordSets = state.wordSets.map((ws) => ({

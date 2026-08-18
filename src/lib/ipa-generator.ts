@@ -235,6 +235,35 @@ const IPA_DICTIONARY: Record<string, string> = {
   wrong: 'rɒŋ',
 };
 
+export function getWordIpa(rawWord: string): string {
+  const cleanWord = rawWord.toLowerCase().replace(/[^a-z]/g, '');
+  if (!cleanWord) return '';
+
+  if (IPA_DICTIONARY[cleanWord]) {
+    return `/${IPA_DICTIONARY[cleanWord]}/`;
+  }
+
+  // Fallback rule-based IPA generator for unknown words
+  const ipa = cleanWord
+    .replace(/th/g, 'θ')
+    .replace(/sh/g, 'ʃ')
+    .replace(/ch/g, 'ʧ')
+    .replace(/ph/g, 'f')
+    .replace(/ck/g, 'k')
+    .replace(/ee/g, 'iː')
+    .replace(/oo/g, 'uː')
+    .replace(/ea/g, 'iː')
+    .replace(/ai/g, 'eɪ')
+    .replace(/ay/g, 'eɪ')
+    .replace(/ou/g, 'aʊ')
+    .replace(/ow/g, 'aʊ')
+    .replace(/tion/g, 'ʃən')
+    .replace(/ing/g, 'ɪŋ')
+    .replace(/ed/g, 't');
+
+  return `/${ipa}/`;
+}
+
 export function convertSentenceToIpa(sentence: string): string {
   if (!sentence) return '';
   const words = sentence.trim().split(/\s+/);

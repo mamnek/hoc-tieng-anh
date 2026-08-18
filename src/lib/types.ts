@@ -152,3 +152,111 @@ export interface VideoItem {
   completedSegmentsCount: number;
   createdAt: string;
 }
+
+// ──────────────── IELTS Speaking Types ────────────────
+export interface SpeakingQuestion {
+  id: string;
+  text: string;
+  part: 1 | 2 | 3;
+  suggestedDurationSeconds: number;
+  topic: string;
+  sampleAnswerBand8?: string;
+  collocations?: string[];
+  ideaHints?: string[];
+}
+
+export interface SpeakingCueCard {
+  id: string;
+  topic: string;
+  title: string;
+  bulletPoints: string[];
+  prepTimeSeconds: number; // 60s
+  speakingTimeSeconds: number; // 120s
+  sampleAnswerBand8: string;
+  collocations: string[];
+  ideaHints: string[];
+}
+
+export interface SpeakingQuestionSet {
+  id: string;
+  title: string;
+  topic: string;
+  level: 'Cơ bản' | 'Trung cấp' | 'Nâng cao';
+  badge?: 'Mới' | 'Hot' | 'Forecast Q3' | 'Forecast Q4';
+  description: string;
+  part1Questions: SpeakingQuestion[];
+  part2CueCard: SpeakingCueCard;
+  part3Questions: SpeakingQuestion[];
+  isNew?: boolean;
+  createdAt: string;
+}
+
+export interface WordPronunciationItem {
+  word: string;
+  ipa: string;
+  severity: 'none' | 'minor' | 'light' | 'heavy';
+  feedback?: string;
+}
+
+export interface CriteriaScoreDetail {
+  name: 'Fluency & Coherence' | 'Lexical Resource' | 'Grammatical Range & Accuracy' | 'Pronunciation';
+  nameVi: string;
+  score: number; // 0.0 - 9.0
+  feedback: string;
+  suggestion: string;
+  details: string;
+}
+
+export interface InlineCorrectionItem {
+  originalText: string;
+  correctedText: string;
+  insertedPhrases: string[];
+  explanation: string;
+}
+
+export interface SpeakingAttemptAnswer {
+  questionId: string;
+  questionText: string;
+  part: 1 | 2 | 3;
+  audioUrl?: string;
+  transcript: string;
+  durationSeconds: number;
+  wordCount: number;
+  speakingRateWpm: number;
+  overallBand: number;
+  criteriaScores: CriteriaScoreDetail[];
+  wordLevelPronunciation: WordPronunciationItem[];
+  inlineCorrections: InlineCorrectionItem;
+  improvedAnswer: string;
+  ideaExpansion: string[];
+  vocabularySuggestions: string[];
+}
+
+export interface SpeakingAttempt {
+  id: string;
+  userId: string;
+  questionSetId: string;
+  questionSetTitle: string;
+  topic: string;
+  mode: 'full_mock' | 'single_question';
+  overallBand: number;
+  fluencyBand: number;
+  lexicalBand: number;
+  grammarBand: number;
+  pronunciationBand: number;
+  totalDurationSeconds: number;
+  answers: SpeakingAttemptAnswer[];
+  createdAt: string;
+}
+
+export interface SpeakingErrorReport {
+  id: string;
+  userId: string;
+  attemptId: string;
+  questionText: string;
+  transcript: string;
+  scoreReported: number;
+  userNote: string;
+  createdAt: string;
+}
+
