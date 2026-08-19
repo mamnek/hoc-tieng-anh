@@ -95,18 +95,62 @@ export default function VideoHubPage() {
     setProcessingStep(0);
 
     try {
-      // Step 1: Call REAL backend YouTube transcript fetcher API
+      // Step 1: Extract real transcript from Client Browser (Bypasses Render cloud IP restrictions)
       setProcessingStep(1);
+      let clientSegments: { start: number; duration: number; text: string }[] = [];
+
+      try {
+        const timedUrls = [
+          `https://www.youtube.com/api/timedtext?v=${ytId}&lang=en`,
+          `https://www.youtube.com/api/timedtext?v=${ytId}&lang=en&kind=asr`,
+          `https://www.youtube.com/api/timedtext?v=${ytId}&lang=en-US`,
+          `https://www.youtube.com/api/timedtext?v=${ytId}&lang=en-US&kind=asr`,
+          `https://www.youtube.com/api/timedtext?v=${ytId}&lang=en-GB`,
+        ];
+
+        for (const u of timedUrls) {
+          try {
+            const ttRes = await fetch(u);
+            if (ttRes.ok) {
+              const xml = await ttRes.text();
+              if (xml && xml.includes('<text')) {
+                const regex = /<text start="([\d.]+)"(?: dur="([\d.]+)")?[^>]*>(.*?)<\/text>/gi;
+                let m;
+                while ((m = regex.exec(xml)) !== null) {
+                  const raw = m[3]
+                    .replace(/&amp;/g, '&')
+                    .replace(/&lt;/g, '<')
+                    .replace(/&gt;/g, '>')
+                    .replace(/&#39;/g, "'")
+                    .replace(/&quot;/g, '"')
+                    .replace(/<[^>]*>/g, '')
+                    .trim();
+                  if (raw) {
+                    clientSegments.push({
+                      start: Math.floor(parseFloat(m[1])),
+                      duration: Math.ceil(parseFloat(m[2] || '3')),
+                      text: raw,
+                    });
+                  }
+                }
+                if (clientSegments.length > 0) break;
+              }
+            }
+          } catch (_) {}
+        }
+      } catch (_) {}
+
+      // Step 2: Call backend API with clientSegments
+      setProcessingStep(2);
       const res = await fetch('/api/youtube-transcript', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           youtubeId: ytId,
           title: videoTitle.trim() || 'Video YouTube',
+          clientSegments: clientSegments.length > 0 ? clientSegments : undefined,
         }),
       });
-
-      setProcessingStep(2);
       const resText = await res.text();
       let data: any = {};
       try {

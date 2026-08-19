@@ -89,7 +89,7 @@ async function safeTranslateToVietnamese(text: string): Promise<string> {
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { youtubeId } = body;
+    const { youtubeId, clientSegments, title } = body;
 
     if (!youtubeId || typeof youtubeId !== 'string') {
       return NextResponse.json(
@@ -103,21 +103,35 @@ export async function POST(req: NextRequest) {
     interface RawSeg { start: number; duration: number; text: string }
     let rawSegments: RawSeg[] = [];
 
+    // ─── TIER 0: Client-Side Subtitle Ingestion (Bypasses Cloud Datacenter IP blocking on Render) ───
+    if (clientSegments && Array.isArray(clientSegments) && clientSegments.length > 0) {
+      rawSegments = clientSegments
+        .map((item: any) => ({
+          start: Math.floor(Number(item.start) || 0),
+          duration: Math.ceil(Number(item.duration) || 3),
+          text: decodeHtmlEntities(String(item.text || '')),
+        }))
+        .filter((s) => s.text.length > 0);
+      console.log(`[YouTube Transcript] Received ${rawSegments.length} real segments from client browser!`);
+    }
+
     // ─── TIER 1: Language-Specific Fetch ───
-    const langAttempts = ['en', 'en-US', 'en-GB', 'en-CA', 'en-AU', 'en-IN', 'a.en'];
-    for (const lang of langAttempts) {
-      if (rawSegments.length > 0) break;
-      try {
-        const transcript = await YoutubeTranscript.fetchTranscript(youtubeId, { lang });
-        if (transcript && transcript.length > 0) {
-          rawSegments = transcript.map((item) => ({
-            start: Math.floor((item.offset || 0) / 1000),
-            duration: Math.ceil((item.duration || 3000) / 1000),
-            text: decodeHtmlEntities(item.text),
-          })).filter((s) => s.text.length > 0);
-          console.log(`[YouTube Transcript] Success with lang="${lang}": ${rawSegments.length} segments`);
-        }
-      } catch (_) {}
+    if (rawSegments.length === 0) {
+      const langAttempts = ['en', 'en-US', 'en-GB', 'en-CA', 'en-AU', 'en-IN', 'a.en'];
+      for (const lang of langAttempts) {
+        if (rawSegments.length > 0) break;
+        try {
+          const transcript = await YoutubeTranscript.fetchTranscript(youtubeId, { lang });
+          if (transcript && transcript.length > 0) {
+            rawSegments = transcript.map((item) => ({
+              start: Math.floor((item.offset || 0) / 1000),
+              duration: Math.ceil((item.duration || 3000) / 1000),
+              text: decodeHtmlEntities(item.text),
+            })).filter((s) => s.text.length > 0);
+            console.log(`[YouTube Transcript] Success with lang="${lang}": ${rawSegments.length} segments`);
+          }
+        } catch (_) {}
+      }
     }
 
     // ─── TIER 2: Any Available Transcript ───
