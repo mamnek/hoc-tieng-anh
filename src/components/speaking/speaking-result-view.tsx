@@ -568,12 +568,17 @@ export function SpeakingResultView({
 
           {/* Section 4: AI Rewritten Band 8.0+ Sentence & Shadowing Action */}
           <div className="bg-gradient-to-br from-purple-50 via-indigo-50 to-pink-50 dark:from-purple-950/20 dark:via-indigo-950/20 dark:to-pink-950/20 rounded-3xl p-6 sm:p-8 border border-purple-100 dark:border-purple-900/40 shadow-sm space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <div className="flex items-center gap-2">
-                <Sparkles className="w-5 h-5 text-primary" />
-                <h3 className="text-lg font-bold text-gray-900 dark:text-white">
-                  Cải Thiện Cả Câu (Phiên Bản Band 8.0+)
-                </h3>
+            <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
+              <div className="flex items-start gap-2">
+                <Sparkles className="w-5 h-5 text-primary shrink-0 mt-0.5" />
+                <div>
+                  <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                    Gợi Ý Mở Rộng Câu & Nâng Cấp Cấu Trúc (Band 8.0+)
+                  </h3>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                    Mẫu câu phát triển cấu trúc học thuật và liên từ mở rộng theo chuẩn IELTS Speaking
+                  </p>
+                </div>
               </div>
 
               <button
@@ -585,7 +590,7 @@ export function SpeakingResultView({
                 className="text-xs bg-white dark:bg-gray-800 text-primary font-bold px-3 py-1.5 rounded-xl border border-purple-200 dark:border-purple-800 flex items-center gap-1.5 shadow-sm hover:scale-105 transition-all cursor-pointer self-start sm:self-auto"
               >
                 {copiedImproved ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <BookOpen className="w-3.5 h-3.5" />}
-                {copiedImproved ? 'Đã copy câu mẫu!' : 'Copy câu Band 8.0+'}
+                {copiedImproved ? 'Đã copy câu mở rộng!' : 'Copy câu mở rộng'}
               </button>
             </div>
 
@@ -607,7 +612,7 @@ export function SpeakingResultView({
                 className="bg-primary hover:bg-primary/90 text-white text-xs sm:text-sm font-bold px-4 py-2 rounded-xl flex items-center gap-2 shadow-sm transition-all cursor-pointer"
               >
                 <Volume2 className="w-4 h-4" />
-                Nghe đọc câu Band 8.0+
+                Nghe đọc câu mở rộng Band 8.0+
               </button>
             </div>
           </div>

@@ -4,44 +4,263 @@ import { CriteriaScoreDetail, WordPronunciationItem, InlineCorrectionItem } from
 
 export const maxDuration = 10;
 
-// Tricky pronunciation words, silent letters & multi-syllabic stress patterns
+// Tricky pronunciation words, silent letters & multi-syllabic stress patterns (180+ core IELTS words)
 const TRICKY_PRONUNCIATION_WORDS: Record<string, { severity: 'minor' | 'light' | 'heavy'; feedback: string }> = {
-  cuisine: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm tiết thứ 2 /kwɪˈziːn/, tránh đọc là "cui-sin"' },
-  comfortable: { severity: 'light', feedback: 'Thường đọc 3 âm tiết /ˈkʌmftəbl/, nuốt âm "or"' },
-  comfort: { severity: 'light', feedback: 'Trọng âm rơi vào âm tiết đầu /ˈkʌmfət/, tránh đọc là "come-fort"' },
-  vegetable: { severity: 'light', feedback: 'Đọc 3 âm tiết /ˈvɛdʒtəbl/, tránh đọc 4 âm "ve-ge-ta-ble"' },
-  clothes: { severity: 'light', feedback: 'Phát âm /kləʊðz/ hoặc /kləʊz/, cẩn thận âm đuôi /ðz/' },
-  development: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2 /dɪˈvɛləpmənt/' },
-  environmental: { severity: 'light', feedback: 'Trọng âm chính ở /mɛn/: /ɪnˌvaɪrənˈmɛntl/' },
-  technology: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /tɛkˈnɒlədʒi/' },
-  photographer: { severity: 'heavy', feedback: 'Trọng âm chuyển sang âm 2: /fəˈtɒɡrəfər/' },
-  opportunity: { severity: 'light', feedback: 'Trọng âm chính ở /tjuː/: /ˌɒpəˈtjuːnɪti/' },
-  architecture: { severity: 'heavy', feedback: 'Âm "ch" phát âm là /k/: /ˈɑːkɪtɛktʃər/' },
-  schedule: { severity: 'light', feedback: 'Phát âm /ˈʃɛdjuːl/ (UK) hoặc /ˈskɛdʒuːl/ (US)' },
-  culture: { severity: 'minor', feedback: 'Phát âm /ˈkʌltʃər/, chú ý âm /tʃ/' },
-  delicious: { severity: 'minor', feedback: 'Phát âm /dɪˈlɪʃəs/, chú ý âm /ʃ/' },
-  specific: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /spəˈsɪfɪk/' },
-  entrepreneur: { severity: 'heavy', feedback: 'Từ mượn tiếng Pháp: /ˌɒntrəprəˈnɜːr/' },
-  variety: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /vəˈraɪəti/' },
-  economy: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪˈkɒnəmi/' },
-  economic: { severity: 'light', feedback: 'Trọng âm chuyển sang âm 3: /ˌiːkəˈnɒmɪk/' },
-  chaos: { severity: 'heavy', feedback: 'Bắt đầu bằng âm /k/: /ˈkeɪɒs/' },
+  // Silent Letters & French/Classical Loanwords
   subtle: { severity: 'heavy', feedback: 'Âm "b" là âm câm: /ˈsʌtl/' },
   debt: { severity: 'heavy', feedback: 'Âm "b" là âm câm: /dɛt/' },
   doubt: { severity: 'heavy', feedback: 'Âm "b" là âm câm: /daʊt/' },
   receipt: { severity: 'heavy', feedback: 'Âm "p" là âm câm: /rɪˈsiːt/' },
   island: { severity: 'heavy', feedback: 'Âm "s" là âm câm: /ˈaɪlənd/' },
+  aisle: { severity: 'heavy', feedback: 'Âm "s" là âm câm: /aɪl/' },
   muscle: { severity: 'light', feedback: 'Âm "c" là âm câm: /ˈmʌsl/' },
   foreign: { severity: 'minor', feedback: 'Âm "g" là âm câm: /ˈfɒrɪn/' },
-  colleague: { severity: 'light', feedback: 'Trọng âm âm 1, đuôi /ɡ/: /ˈkɒliːɡ/' },
   vehicle: { severity: 'heavy', feedback: 'Âm "h" câm, trọng âm âm 1: /ˈviːɪkl/' },
   iron: { severity: 'light', feedback: 'Âm "r" câm (UK): /ˈaɪən/' },
   salmon: { severity: 'heavy', feedback: 'Âm "l" là âm câm: /ˈsæmən/' },
-  alarm: { severity: 'light', feedback: 'Trọng âm rơi vào âm tiết thứ hai /əˈlɑːm/, chú ý nguyên âm dài /ɑː/' },
-  repair: { severity: 'light', feedback: 'Trọng âm rơi vào âm tiết thứ hai /rɪˈpeər/, chú ý nguyên âm đôi /eə/' },
-  stressed: { severity: 'light', feedback: 'Chú ý chùm phụ âm đầu /str/ và âm đuôi /t/: /strɛst/' },
-  food: { severity: 'minor', feedback: 'Nguyên âm dài /uː/ và bật rõ âm đuôi /d/: /fuːd/' },
+  climb: { severity: 'heavy', feedback: 'Âm "b" cuối là âm câm: /klaɪm/' },
+  thumb: { severity: 'heavy', feedback: 'Âm "b" cuối là âm câm: /θʌm/' },
+  plumber: { severity: 'heavy', feedback: 'Âm "b" là âm câm: /ˈplʌmər/' },
+  comb: { severity: 'heavy', feedback: 'Âm "b" cuối là âm câm: /kəʊm/' },
+  bomb: { severity: 'heavy', feedback: 'Âm "b" cuối là âm câm: /bɒm/' },
+  tomb: { severity: 'heavy', feedback: 'Âm "b" câm, nguyên âm /uː/: /tuːm/' },
+  womb: { severity: 'heavy', feedback: 'Âm "b" câm, nguyên âm /uː/: /wuːm/' },
+  numb: { severity: 'heavy', feedback: 'Âm "b" cuối là âm câm: /nʌm/' },
+  crumb: { severity: 'heavy', feedback: 'Âm "b" cuối là âm câm: /krʌm/' },
+  listen: { severity: 'light', feedback: 'Âm "t" là âm câm: /ˈlɪsn/' },
+  castle: { severity: 'light', feedback: 'Âm "t" là âm câm: /ˈkɑːsl/' },
+  fasten: { severity: 'light', feedback: 'Âm "t" là âm câm: /ˈfɑːsn/' },
+  whistle: { severity: 'light', feedback: 'Âm "t" là âm câm: /ˈwɪsl/' },
+  sword: { severity: 'heavy', feedback: 'Âm "w" là âm câm: /sɔːd/' },
+  answer: { severity: 'light', feedback: 'Âm "w" là âm câm: /ˈɑːnsər/' },
+  whole: { severity: 'light', feedback: 'Âm "w" câm, bắt đầu bằng /h/: /həʊl/' },
+  half: { severity: 'light', feedback: 'Âm "l" là âm câm: /hɑːf/' },
+  calm: { severity: 'light', feedback: 'Âm "l" là âm câm: /kɑːm/' },
+  palm: { severity: 'light', feedback: 'Âm "l" là âm câm: /pɑːm/' },
+  autumn: { severity: 'light', feedback: 'Âm "n" cuối là âm câm: /ˈɔːtəm/' },
+  column: { severity: 'light', feedback: 'Âm "n" cuối là âm câm: /ˈkɒləm/' },
+  damn: { severity: 'light', feedback: 'Âm "n" cuối là âm câm: /dæm/' },
+  hymn: { severity: 'light', feedback: 'Âm "n" cuối là âm câm: /hɪm/' },
+  ballet: { severity: 'heavy', feedback: 'Âm "t" cuối là câm: /ˈbæleɪ/' },
+  debris: { severity: 'heavy', feedback: 'Âm "s" cuối là câm: /ˈdeɪbriː/' },
+  bourgeoisie: { severity: 'heavy', feedback: 'Từ mượn tiếng Pháp: /ˌbʊəʒwɑːˈziː/' },
+  chassis: { severity: 'heavy', feedback: 'Âm "s" cuối là câm: /ˈʃæsi/' },
+  corps: { severity: 'heavy', feedback: 'Âm "p" và "s" đều câm: /kɔːr/' },
+  rendezvous: { severity: 'heavy', feedback: 'Âm "z" và "s" đều câm: /ˈrɒndeɪvuː/' },
+  faux: { severity: 'heavy', feedback: 'Âm "x" là âm câm: /fəʊ/' },
+  psychology: { severity: 'heavy', feedback: 'Âm "p" đầu là âm câm: /saɪˈkɒlədʒi/' },
+  psychiatrist: { severity: 'heavy', feedback: 'Âm "p" đầu là câm, trọng âm âm 2: /saɪˈkaɪətrɪst/' },
+  pneumonia: { severity: 'heavy', feedback: 'Âm "p" đầu là âm câm: /njuːˈməʊniə/' },
+  knee: { severity: 'light', feedback: 'Âm "k" đầu là âm câm: /niː/' },
+  knife: { severity: 'light', feedback: 'Âm "k" đầu là âm câm: /naɪf/' },
+  knight: { severity: 'light', feedback: 'Âm "k" đầu và "gh" đều câm: /naɪt/' },
+  knit: { severity: 'light', feedback: 'Âm "k" đầu là âm câm: /nɪt/' },
+  knowledge: { severity: 'light', feedback: 'Âm "k" câm, nguyên âm ngắn: /ˈnɒlɪdʒ/' },
+  knock: { severity: 'light', feedback: 'Âm "k" đầu là âm câm: /nɒk/' },
+  knot: { severity: 'light', feedback: 'Âm "k" đầu là âm câm: /nɒt/' },
+  wrap: { severity: 'light', feedback: 'Âm "w" đầu là âm câm: /ræp/' },
+  wrist: { severity: 'light', feedback: 'Âm "w" đầu là âm câm: /rɪst/' },
+  write: { severity: 'light', feedback: 'Âm "w" đầu là âm câm: /raɪt/' },
+  wrong: { severity: 'light', feedback: 'Âm "w" đầu là âm câm: /rɒŋ/' },
+  yacht: { severity: 'heavy', feedback: 'Âm "ch" câm: /jɒt/' },
+  quinoa: { severity: 'heavy', feedback: 'Phát âm là /ˈkiːnwɑː/, tránh đọc "kwi-no-a"' },
+  croissant: { severity: 'heavy', feedback: 'Từ mượn tiếng Pháp: /ˈkrwʌsɒ̃/ hoặc /ˈkrwɑːsɒ̃/' },
+  facade: { severity: 'heavy', feedback: 'Âm "c" phát âm là /s/: /fəˈsɑːd/' },
+  niche: { severity: 'light', feedback: 'Phát âm /niːʃ/ hoặc /nɪtʃ/' },
+  chic: { severity: 'heavy', feedback: 'Âm "ch" phát âm là /ʃ/: /ʃiːk/' },
+  cliche: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm cuối: /ˈkliːʃeɪ/' },
+  bureaucracy: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /bjʊəˈrɒkrəsi/' },
+  regime: { severity: 'heavy', feedback: 'Âm "g" phát âm là /ʒ/: /reɪˈʒiːm/' },
+  suite: { severity: 'heavy', feedback: 'Phát âm giống "sweet": /swiːt/' },
+  monk: { severity: 'light', feedback: 'Nguyên âm ngắn /ʌ/: /mʌŋk/' },
+  gauge: { severity: 'heavy', feedback: 'Phát âm là /ɡeɪdʒ/, không phải "gowj"' },
+  choir: { severity: 'heavy', feedback: 'Bắt đầu bằng /kw/: /ˈkwaɪər/' },
+  asthma: { severity: 'heavy', feedback: 'Âm "th" là âm câm: /ˈæsmə/' },
+  isthmus: { severity: 'heavy', feedback: 'Âm "th" là âm câm: /ˈɪsməs/' },
+  bury: { severity: 'heavy', feedback: 'Phát âm giống "berry": /ˈbɛri/' },
+  busy: { severity: 'light', feedback: 'Phát âm là /ˈbɪzi/' },
+  business: { severity: 'light', feedback: 'Đọc 2 âm tiết /ˈbɪznɪs/' },
+  colonel: { severity: 'heavy', feedback: 'Phát âm giống "kernel": /ˈkɜːnl/' },
+  draught: { severity: 'heavy', feedback: 'Phát âm giống "draft": /drɑːft/' },
+  lieutenant: { severity: 'heavy', feedback: 'Phát âm /lɛfˈtɛnənt/ (UK) hoặc /luːˈtɛnənt/ (US)' },
+  hyperbole: { severity: 'heavy', feedback: 'Đọc 4 âm tiết, trọng âm âm 2: /haɪˈpɜːbəli/' },
+  epitome: { severity: 'heavy', feedback: 'Đọc 4 âm tiết, trọng âm âm 2: /ɪˈpɪtəmi/' },
+  genre: { severity: 'heavy', feedback: 'Bắt đầu bằng âm /ʒ/: /ˈʒɒnrə/' },
+  lingerie: { severity: 'heavy', feedback: 'Từ mượn tiếng Pháp: /ˈlɒnʒəri/' },
+  hierarchy: { severity: 'heavy', feedback: 'Phát âm /ˈhaɪərɑːki/, âm "ch" là /k/' },
+  mischievous: { severity: 'heavy', feedback: 'Trọng âm âm 1, 3 âm tiết: /ˈmɪstʃɪvəs/' },
+  chaos: { severity: 'heavy', feedback: 'Bắt đầu bằng âm /k/: /ˈkeɪɒs/' },
+
+  // Stress Shift & Tricky Vowels in IELTS
+  cuisine: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm tiết thứ 2: /kwɪˈziːn/' },
+  comfortable: { severity: 'light', feedback: 'Thường đọc 3 âm tiết /ˈkʌmftəbl/, nuốt âm "or"' },
+  comfort: { severity: 'light', feedback: 'Trọng âm rơi vào âm tiết đầu: /ˈkʌmfət/' },
+  vegetable: { severity: 'light', feedback: 'Đọc 3 âm tiết /ˈvɛdʒtəbl/, tránh đọc 4 âm' },
+  chocolate: { severity: 'light', feedback: 'Đọc 2 âm tiết /ˈtʃɒklət/, tránh đọc 3 âm' },
+  camera: { severity: 'minor', feedback: 'Đọc 2 hoặc 3 âm tiết gọn: /ˈkæmrə/ hoặc /ˈkæmərə/' },
+  restaurant: { severity: 'light', feedback: 'Đọc 2 hoặc 3 âm tiết /ˈrɛstrɒnt/, nuốt âm giữa' },
+  temperature: { severity: 'light', feedback: 'Đọc 3 hoặc 4 âm tiết /ˈtɛmprətʃər/' },
+  average: { severity: 'minor', feedback: 'Đọc 2 âm tiết /ˈævərɪdʒ/ hoặc /ˈævrɪdʒ/' },
+  interesting: { severity: 'light', feedback: 'Trọng âm âm đầu /ˈɪntrəstɪŋ/, nuốt âm "e"' },
+  different: { severity: 'minor', feedback: 'Đọc 2 âm tiết /ˈdɪfrənt/, tránh kéo dài "di-fe-rent"' },
+  history: { severity: 'minor', feedback: 'Đọc 2 âm tiết /ˈhɪstri/' },
+  memory: { severity: 'minor', feedback: 'Đọc 2 hoặc 3 âm tiết /ˈmɛməri/' },
+  every: { severity: 'minor', feedback: 'Đọc 2 âm tiết /ˈɛvri/' },
+  family: { severity: 'minor', feedback: 'Đọc 2 hoặc 3 âm tiết /ˈfæmɪli/' },
+  beverage: { severity: 'light', feedback: 'Đọc 3 âm tiết /ˈbɛvərɪdʒ/, chú ý âm đuôi /dʒ/' },
   favorite: { severity: 'minor', feedback: 'Trọng âm rơi vào âm tiết đầu: /ˈfeɪvərɪt/' },
+  delicious: { severity: 'minor', feedback: 'Phát âm /dɪˈlɪʃəs/, chú ý âm /ʃ/' },
+  culture: { severity: 'minor', feedback: 'Phát âm /ˈkʌltʃər/, chú ý âm /tʃ/' },
+  schedule: { severity: 'light', feedback: 'Phát âm /ˈʃɛdjuːl/ (UK) hoặc /ˈskɛdʒuːl/ (US)' },
+  specific: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /spəˈsɪfɪk/' },
+  entrepreneur: { severity: 'heavy', feedback: 'Từ mượn tiếng Pháp, trọng âm âm cuối: /ˌɒntrəprəˈnɜːr/' },
+  variety: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /vəˈraɪəti/' },
+  various: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈveəriəs/' },
+  vary: { severity: 'minor', feedback: 'Phát âm là /ˈveəri/' },
+  economy: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪˈkɒnəmi/' },
+  economic: { severity: 'light', feedback: 'Trọng âm chuyển sang âm 3: /ˌiːkəˈnɒmɪk/' },
+  economical: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌiːkəˈnɒmɪkl/' },
+  economist: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪˈkɒnəmɪst/' },
+  photographer: { severity: 'heavy', feedback: 'Trọng âm chuyển sang âm 2: /fəˈtɒɡrəfər/' },
+  photography: { severity: 'heavy', feedback: 'Trọng âm chuyển sang âm 2: /fəˈtɒɡrəfi/' },
+  photographic: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌfəʊtəˈɡræfɪk/' },
+  development: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /dɪˈvɛləpmənt/' },
+  environmental: { severity: 'light', feedback: 'Trọng âm chính ở âm 4: /ɪnˌvaɪrənˈmɛntl/' },
+  environment: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪnˈvaɪrənmənt/' },
+  technology: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /tɛkˈnɒlədʒi/' },
+  technological: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌtɛknəˈlɒdʒɪkl/' },
+  opportunity: { severity: 'light', feedback: 'Trọng âm chính ở /tjuː/: /ˌɒpəˈtjuːnɪti/' },
+  architecture: { severity: 'heavy', feedback: 'Âm "ch" phát âm là /k/: /ˈɑːkɪtɛktʃər/' },
+  architect: { severity: 'heavy', feedback: 'Âm "ch" là /k/, trọng âm âm 1: /ˈɑːkɪtɛkt/' },
+  architectural: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌɑːkɪˈtɛktʃərəl/' },
+  alarm: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2 /əˈlɑːm/, nguyên âm dài /ɑː/' },
+  repair: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2 /rɪˈpeər/, nguyên âm đôi /eə/' },
+  stressed: { severity: 'light', feedback: 'Chú ý chùm phụ âm /str/ và âm đuôi /t/: /strɛst/' },
+  food: { severity: 'minor', feedback: 'Nguyên âm dài /uː/ và bật rõ âm đuôi /d/: /fuːd/' },
+  colleague: { severity: 'light', feedback: 'Trọng âm âm 1, đuôi /ɡ/: /ˈkɒliːɡ/' },
+  colleagues: { severity: 'light', feedback: 'Phát âm là /ˈkɒliːɡz/' },
+  clothes: { severity: 'light', feedback: 'Phát âm /kləʊðz/ hoặc /kləʊz/, cẩn thận âm đuôi' },
+  breath: { severity: 'light', feedback: 'Danh từ: nguyên âm ngắn /ɛ/, âm đuôi vô thanh /θ/: /brɛθ/' },
+  breathe: { severity: 'light', feedback: 'Động từ: nguyên âm dài /iː/, âm đuôi hữu thanh /ð/: /briːð/' },
+  cloth: { severity: 'light', feedback: 'Danh từ: nguyên âm /ɒ/, âm đuôi /θ/: /klɒθ/' },
+  clothe: { severity: 'light', feedback: 'Động từ: nguyên âm /əʊ/, âm đuôi /ð/: /kləʊð/' },
+  southern: { severity: 'light', feedback: 'Nguyên âm ngắn /ʌ/: /ˈsʌðən/' },
+  northern: { severity: 'light', feedback: 'Nguyên âm dài /ɔː/: /ˈnɔːðən/' },
+  athlete: { severity: 'light', feedback: 'Đọc 2 âm tiết /ˈæθliːt/, tránh đọc "ath-e-lete"' },
+  athletic: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /æθˈlɛtɪk/' },
+  mischief: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 1: /ˈmɪstʃɪf/' },
+  prejudice: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 1: /ˈprɛdʒʊdɪs/' },
+  catastrophe: { severity: 'heavy', feedback: 'Đọc 4 âm tiết, trọng âm âm 2: /kəˈtæstrəfi/' },
+  recipe: { severity: 'heavy', feedback: 'Đọc 3 âm tiết, trọng âm âm 1: /ˈrɛsɪpi/' },
+  anemone: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /əˈnɛməni/' },
+  synonym: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈsɪnənɪm/' },
+  antonym: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈæntənɪm/' },
+  anecdote: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈænɪkdəʊt/' },
+  irony: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈaɪrəni/' },
+  ironic: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /aɪˈrɒnɪk/' },
+  phenomenon: { severity: 'heavy', feedback: 'Số ít, trọng âm âm 2: /fəˈnɒmɪnən/' },
+  phenomena: { severity: 'heavy', feedback: 'Số nhiều, trọng âm âm 2: /fəˈnɒmɪnə/' },
+  criterion: { severity: 'light', feedback: 'Số ít, trọng âm âm 2: /kraɪˈtɪəriən/' },
+  criteria: { severity: 'light', feedback: 'Số nhiều, trọng âm âm 2: /kraɪˈtɪəriə/' },
+  analysis: { severity: 'heavy', feedback: 'Danh từ số ít, trọng âm âm 2: /əˈnæləsɪs/' },
+  analyses: { severity: 'heavy', feedback: 'Danh từ số nhiều: /əˈnæləsiːz/' },
+  analyze: { severity: 'light', feedback: 'Động từ, trọng âm rơi vào âm 1: /ˈænəlaɪz/' },
+  hypothesis: { severity: 'heavy', feedback: 'Số ít, trọng âm rơi vào âm 2: /haɪˈpɒθɪsɪs/' },
+  hypotheses: { severity: 'heavy', feedback: 'Số nhiều: /haɪˈpɒθɪsiːz/' },
+  oasis: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /əʊˈeɪsɪs/' },
+  crisis: { severity: 'light', feedback: 'Số ít: /ˈkraɪsɪs/' },
+  crises: { severity: 'light', feedback: 'Số nhiều: /ˈkraɪsiːz/' },
+
+  // Key IELTS Academic Vocabulary
+  sustainable: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /səˈsteɪnəbl/' },
+  sustainability: { severity: 'light', feedback: 'Trọng âm chính ở /bɪl/: /səˌsteɪnəˈbɪlɪti/' },
+  biodiversity: { severity: 'light', feedback: 'Trọng âm chính rơi vào /vɜː/: /ˌbaɪəʊdaɪˈvɜːsɪti/' },
+  indispensable: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌɪndɪˈspɛnsəbl/' },
+  revolutionize: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˌrɛvəˈluːʃənaɪz/' },
+  streamline: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈstriːmlaɪn/' },
+  equilibrium: { severity: 'heavy', feedback: 'Trọng âm chính ở âm 3 /lɪb/: /ˌiːkwɪˈlɪbriəm/' },
+  proliferation: { severity: 'heavy', feedback: 'Trọng âm chính ở /reɪ/: /prəˌlɪfəˈreɪʃn/' },
+  profound: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 2: /prəˈfaʊnd/' },
+  cognitive: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈkɒɡnɪtɪv/' },
+  bandwidth: { severity: 'minor', feedback: 'Phát âm là /ˈbændwɪdθ/' },
+  cosmopolitan: { severity: 'light', feedback: 'Trọng âm chính ở âm 3: /ˌkɒzməˈpɒlɪtən/' },
+  tranquil: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈtræŋkwɪl/' },
+  antidote: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈæntɪdəʊt/' },
+  ethnocentrism: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 3: /ˌɛθnəʊˈsɛntrɪzəm/' },
+  synthesize: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈsɪnθɪsaɪz/' },
+  gratifying: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈɡrætɪfaɪɪŋ/' },
+  tactile: { severity: 'minor', feedback: 'Phát âm /ˈtæktaɪl/ hoặc /ˈtæktl/' },
+  geopolitical: { severity: 'light', feedback: 'Trọng âm chính ở /lɪt/: /ˌdʒiːəʊpəˈlɪtɪkl/' },
+  contemporary: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /kənˈtɛmpərəri/' },
+  procrastination: { severity: 'light', feedback: 'Trọng âm chính ở /neɪ/: /prəˌkræstɪˈneɪʃn/' },
+  transformative: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /trænsˈfɔːmətɪv/' },
+  obsolescence: { severity: 'heavy', feedback: 'Trọng âm chính ở /sɛns/: /ˌɒbsəˈlɛsns/' },
+  penchant: { severity: 'heavy', feedback: 'Phát âm /ˈpɒ̃ʃɒ̃/ hoặc /ˈpɛntʃənt/' },
+  segregate: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈsɛɡrɪɡeɪt/' },
+  hazardous: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈhæzədəs/' },
+  culprit: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈkʌlprɪt/' },
+  culprits: { severity: 'minor', feedback: 'Phát âm /ˈkʌlprɪts/' },
+  curtail: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /kɜːˈteɪl/' },
+  curtailed: { severity: 'light', feedback: 'Phát âm /kɜːˈteɪld/' },
+  multifaceted: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌmʌltɪˈfæsɪtɪd/' },
+  decarbonize: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /diːˈkɑːbənaɪz/' },
+  exorbitant: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /ɪɡˈzɔːbɪtənt/' },
+  anomaly: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /əˈnɒməli/' },
+  anomalies: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /əˈnɒməlɪz/' },
+  gastronomy: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /ɡæˈstrɒnəmi/' },
+  encapsulate: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪnˈkæpsjuleɪt/' },
+  encapsulates: { severity: 'light', feedback: 'Phát âm /ɪnˈkæpsjuleɪts/' },
+  ingenuity: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 3: /ˌɪndʒɪˈnjuːɪti/' },
+  homogenization: { severity: 'heavy', feedback: 'Trọng âm chính ở /zeɪ/: /həˌmɒdʒənaɪˈzeɪʃn/' },
+  artisanal: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /ɑːˈtɪzənl/' },
+  significant: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 2: /sɪɡˈnɪfɪkənt/' },
+  perspective: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 2: /pəˈspɛktɪv/' },
+  convenient: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 2: /kənˈviːniənt/' },
+  essential: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 2: /ɪˈsɛnʃl/' },
+  fundamental: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌfʌndəˈmɛntl/' },
+  crucial: { severity: 'minor', feedback: 'Phát âm /ˈkruːʃl/, âm "c" là /ʃ/' },
+  fascinating: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈfæsɪneɪtɪŋ/' },
+  exceptionally: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪkˈsɛpʃənəli/' },
+  worthwhile: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 2: /ˌwɜːθˈwaɪl/' },
+  comprehensive: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌkɒmprɪˈhɛnsɪv/' },
+  infrastructure: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈɪnfrəstrʌktʃər/' },
+  deteriorate: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /dɪˈtɪəriəreɪt/' },
+  exacerbate: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /ɪɡˈzæsəbeɪt/' },
+  prioritize: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /praɪˈɒrɪtaɪz/' },
+  collaborate: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /kəˈlæbəreɪt/' },
+  fluctuate: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈflʌktʃueɪt/' },
+  ubiquitous: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /juːˈbɪkwɪtəs/' },
+  unprecedented: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /ʌnˈprɛsɪdɛntɪd/' },
+  pragmatic: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /præɡˈmætɪk/' },
+  resilient: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /rɪˈzɪliənt/' },
+  vulnerable: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 1: /ˈvʌlnərəbl/' },
+  lucrative: { severity: 'light', feedback: 'Trọng âm rơi vào âm 1: /ˈluːkrətɪv/' },
+  inevitable: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /ɪnˈɛvɪtəbl/' },
+  meticulous: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /mɪˈtɪkjʊləs/' },
+  enthusiastic: { severity: 'light', feedback: 'Trọng âm rơi vào âm 4: /ɪnˌθjuːziˈæstɪk/' },
+  enthusiasm: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪnˈθjuːziæzəm/' },
+  academic: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌækəˈdɛmɪk/' },
+  academy: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /əˈkædəmi/' },
+  competence: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈkɒmpɪtəns/' },
+  competent: { severity: 'minor', feedback: 'Trọng âm rơi vào âm 1: /ˈkɒmpɪtənt/' },
+  initiative: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 2: /ɪˈnɪʃətɪv/' },
+  initiate: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /ɪˈnɪʃieɪt/' },
+  prevalent: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 1: /ˈprɛvələnt/' },
+  prevalence: { severity: 'heavy', feedback: 'Trọng âm rơi vào âm 1: /ˈprɛvələns/' },
+  substantial: { severity: 'light', feedback: 'Trọng âm rơi vào âm 2: /səbˈstænʃl/' },
+  substantially: { severity: 'light', feedback: 'Phát âm là /səbˈstænʃəli/' },
+  deterioration: { severity: 'heavy', feedback: 'Trọng âm chính ở /reɪ/: /dɪˌtɪəriəˈreɪʃn/' },
+  globalization: { severity: 'light', feedback: 'Trọng âm chính ở /zeɪ/: /ˌɡləʊbəlaɪˈzeɪʃn/' },
+  urbanization: { severity: 'light', feedback: 'Trọng âm chính ở /zeɪ/: /ˌɜːbənaɪˈzeɪʃn/' },
+  digitization: { severity: 'light', feedback: 'Trọng âm chính ở /zeɪ/: /ˌdɪdʒɪtaɪˈzeɪʃn/' },
+  commercialization: { severity: 'light', feedback: 'Trọng âm chính ở /zeɪ/: /kəˌmɜːʃəlaɪˈzeɪʃn/' },
+  individualism: { severity: 'light', feedback: 'Trọng âm rơi vào âm 3: /ˌɪndɪˈvɪdʒuəlɪzəm/' },
+  accessibility: { severity: 'light', feedback: 'Trọng âm chính ở /bɪl/: /əkˌsɛsəˈbɪlɪti/' },
+  reliability: { severity: 'light', feedback: 'Trọng âm chính ở /bɪl/: /rɪˌlaɪəˈbɪlɪti/' },
+  versatility: { severity: 'light', feedback: 'Trọng âm chính ở /tɪl/: /ˌvɜːsəˈtɪlɪti/' },
+  authenticity: { severity: 'heavy', feedback: 'Trọng âm chính ở /tɪs/: /ˌɔːθɛnˈtɪsɪti/' },
+  spontaneity: { severity: 'heavy', feedback: 'Trọng âm chính ở /neɪ/: /ˌspɒntəˈneɪɪti/' },
+  simultaneity: { severity: 'heavy', feedback: 'Trọng âm chính ở /neɪ/: /ˌsɪmʊltəˈneɪɪti/' },
 };
 
 // High-scoring IELTS linking words & discourse markers
@@ -65,6 +284,209 @@ const ADVANCED_VOCAB = [
   'significant', 'perspective', 'convenient', 'essential', 'fundamental', 'crucial',
   'fascinating', 'exceptionally', 'worthwhile', 'comprehensive', 'sustainable'
 ];
+
+// Topic-based idea expansion & vocabulary suggestions
+function getTopicSuggestions(topic: string, questionText: string) {
+  const combined = `${topic} ${questionText}`.toLowerCase();
+
+  if (/\b(tech|technology|computer|phone|smartphone|internet|ai|robot|digital|app|software|online|device|social media|cyber|virtual)\b/.test(combined)) {
+    return {
+      category: 'Công nghệ & Đời sống số (Technology & AI)',
+      ideas: [
+        'Đánh giá tác động hai chiều (Dual impact): Nêu cả tiện ích vượt trội (tiết kiệm thời gian, kết nối toàn cầu) và mặt trái (giảm tương tác trực tiếp, phụ thuộc màn hình).',
+        'Dẫn chứng công nghệ cụ thể (Specific Tech Trend): Đề cập đến AI (trí tuệ nhân tạo), tự động hóa hoặc điện toán đám mây trong học tập và công việc hàng ngày.',
+        'Dự báo tương lai (Future Outlook): Bày tỏ quan điểm về xu hướng số hóa trong 5-10 năm tới và cách con người cần chủ động thích ứng.',
+      ],
+      vocabularies: [
+        'technological advancement (tiến bộ vượt bậc về công nghệ)',
+        'streamline daily workflow (tối ưu hóa quy trình làm việc)',
+        'digital transformation (chuyển đổi số toàn diện)',
+        'double-edged sword (con dao hai lưỡi - vừa lợi vừa hại)',
+        'algorithm-driven platform (nền tảng vận hành bởi thuật toán)',
+      ],
+    };
+  }
+
+  if (/\b(work|job|career|profession|office|company|colleague|colleagues|salary|employment|business|workplace|boss|promotion|occupation|freelance)\b/.test(combined)) {
+    return {
+      category: 'Công việc & Sự nghiệp (Work & Career)',
+      ideas: [
+        'Cân bằng công việc & cuộc sống (Work-life balance): Phân tích tầm quan trọng của việc tái tạo năng lượng để duy trì năng suất lao động bền vững.',
+        'Kỹ năng mềm & Thích ứng nghề nghiệp: Nhấn mạnh kỹ năng giao tiếp, giải quyết vấn đề và thích nghi trong môi trường làm việc biến động.',
+        'Động lực & Thăng tiến (Career Progression): Chia sẻ mục tiêu nghề nghiệp dài hạn và cơ hội học hỏi từ những người đi trước giàu kinh nghiệm.',
+      ],
+      vocabularies: [
+        'climb the corporate ladder (thăng tiến từng bước trong sự nghiệp)',
+        'work-life equilibrium (sự cân bằng giữa công việc và đời sống)',
+        'high-pressure environment (môi trường làm việc áp lực cao)',
+        'lucrative career path (con đường sự nghiệp đem lại thu nhập tốt)',
+        'foster teamwork and collaboration (thúc đẩy tinh thần làm việc nhóm)',
+      ],
+    };
+  }
+
+  if (/\b(education|study|school|university|college|student|students|teacher|teachers|course|learn|academic|subject|major|exam|degree|lecture|curriculum)\b/.test(combined)) {
+    return {
+      category: 'Giáo dục & Học tập (Education & Study)',
+      ideas: [
+        'Phương pháp học tập chủ động (Active Learning): So sánh giữa việc học vẹt truyền thống và học qua dự án thực tế kết hợp tư duy phản biện.',
+        'Tác động của công nghệ vào giáo dục: Phân tích các khóa học trực tuyến (E-learning) và kho tài nguyên số mở rộng cơ hội học tập bình đẳng.',
+        'Phát triển toàn diện (Holistic Development): Nhấn mạnh trường học không chỉ truyền thụ kiến thức mà còn rèn luyện nhân cách và kỹ năng sống.',
+      ],
+      vocabularies: [
+        'pursue higher education (theo đuổi bậc học chuyên sâu hơn)',
+        'nurture critical thinking skills (nuôi dưỡng tư duy phản biện)',
+        'well-rounded curriculum (chương trình giảng dạy toàn diện)',
+        'academic excellence (thành tích học thuật xuất sắc)',
+        'autonomous learning (khả năng tự học độc lập)',
+      ],
+    };
+  }
+
+  if (/\b(environment|nature|pollution|climate|weather|green|animal|animals|plant|plants|recycle|sustainable|eco|carbon|warming|planet|waste|forest)\b/.test(combined)) {
+    return {
+      category: 'Môi trường & Thiên nhiên (Environment & Nature)',
+      ideas: [
+        'Trách nhiệm cá nhân vs Chính sách vĩ mô: Phân tích hành động nhỏ của người dân (phân loại rác, tiết kiệm điện) song hành cùng luật bảo vệ môi trường.',
+        'Chuyển đổi năng lượng xanh: Đề xuất thay thế nhiên liệu hóa thạch bằng năng lượng tái tạo (mặt trời, gió) để giảm thiểu biến đổi khí hậu.',
+        'Bảo tồn đa dạng sinh học: Nhấn mạnh sự cần thiết của việc bảo vệ môi trường sống tự nhiên cho các loài động thực vật quý hiếm.',
+      ],
+      vocabularies: [
+        'carbon footprint reduction (giảm thiểu dấu chân carbon)',
+        'sustainable practices (các thói quen thực hành bền vững)',
+        'alleviate environmental degradation (giảm thiểu suy thoái môi trường)',
+        'renewable energy sources (các nguồn năng lượng tái tạo)',
+        'biodiversity preservation (bảo tồn đa dạng sinh học)',
+      ],
+    };
+  }
+
+  if (/\b(travel|trip|tourism|tourist|tourists|holiday|vacation|country|city|cities|place|visit|destination|journey|flight|hotel|explore|sightseeing)\b/.test(combined)) {
+    return {
+      category: 'Du lịch & Khám phá (Travel & Tourism)',
+      ideas: [
+        'Mở rộng nhân sinh quan (Broaden Horizons): Giải thích việc đi du lịch giúp trải nghiệm phong tục tập quán mới và xóa bỏ định kiến văn hóa.',
+        'Du lịch sinh thái có trách nhiệm (Eco-tourism): Nhắc đến xu hướng du lịch tôn trọng môi trường địa phương và hỗ trợ kinh tế cộng đồng bản địa.',
+        'Trải nghiệm cá nhân sâu sắc: Kể lại một kỷ niệm ấn tượng về ẩm thực, cảnh quan thiên nhiên hoặc lòng hiếu khách của người dân địa phương.',
+      ],
+      vocabularies: [
+        'broaden one\'s geographical and cultural horizons (mở rộng hiểu biết văn hóa và địa lý)',
+        'off the beaten track (những địa điểm hoang sơ, ít du khách)',
+        'immerse oneself in the local culture (hòa mình trọn vẹn vào văn hóa bản xứ)',
+        'breathtaking landscape (cảnh quan thiên nhiên ngoạn mục)',
+        'hospitality of local residents (sự nồng hậu của người dân địa phương)',
+      ],
+    };
+  }
+
+  if (/\b(family|friend|friends|relationship|relationships|parent|parents|child|children|relative|neighbor|people|generation|bond|mother|father|sibling)\b/.test(combined)) {
+    return {
+      category: 'Gia đình & Mối quan hệ (Family & Friends)',
+      ideas: [
+        'Sự gắn kết & Kỷ niệm ấm áp (Family Bonding): Nhấn mạnh tầm quan trọng của các bữa cơm gia đình hoặc buổi gặp gỡ cuối tuần trong việc thắt chặt tình thân.',
+        'Thu hẹp khoảng cách thế hệ (Generation Gap): Phân tích cách lắng nghe và tôn trọng sự khác biệt giữa các thế hệ trong gia đình.',
+        'Chỗ dựa tinh thần (Emotional Anchor): Khẳng định gia đình và bạn bè thân thiết là nguồn động viên lớn nhất mỗi khi gặp khó khăn, thử thách.',
+      ],
+      vocabularies: [
+        'tight-knit family bond (mối quan hệ gia đình gắn bó bền chặt)',
+        'bridge the generation gap (thu hẹp khoảng cách thế hệ)',
+        'reliable support system (hệ thống hỗ trợ / chỗ dựa đáng tin cậy)',
+        'cherish memorable moments (trân trọng những khoảnh khắc đáng nhớ)',
+        'unconditional love and guidance (tình yêu thương và sự dìu dắt vô điều kiện)',
+      ],
+    };
+  }
+
+  if (/\b(health|fitness|sport|sports|exercise|diet|food|cooking|habit|sleep|mental|lifestyle|wellness|gym|running|nutrition|stress)\b/.test(combined)) {
+    return {
+      category: 'Sức khỏe & Lối sống (Health & Lifestyle)',
+      ideas: [
+        'Sức khỏe thể chất song hành cùng tinh thần: Nhấn mạnh việc tập thể dục giúp giải phóng endorphin, giảm căng thẳng và nâng cao sự tỉnh táo.',
+        'Chế độ dinh dưỡng cân bằng: Khuyên duy trì chế độ ăn giàu rau xanh, hạn chế đồ ăn nhanh chế biến sẵn để phòng ngừa bệnh mãn tính.',
+        'Xây dựng thói quen kiên trì: Phân tích tầm quan trọng của việc duy trì thời gian biểu ngủ đủ giấc và tập luyện đều đặn mỗi ngày.',
+      ],
+      vocabularies: [
+        'maintain physical and psychological well-being (duy trì sức khỏe thể chất và tinh thần)',
+        'nutritious and balanced diet (chế độ ăn uống dinh dưỡng và cân bằng)',
+        'sedentary lifestyle (lối sống thụ động, ngồi nhiều)',
+        'boost the immune system (tăng cường hệ thống miễn dịch)',
+        'relieve chronic stress (giải tỏa căng thẳng kéo dài)',
+      ],
+    };
+  }
+
+  if (/\b(art|music|culture|movie|movies|film|book|books|reading|entertainment|museum|festival|tradition|hobby|history|heritage|song)\b/.test(combined)) {
+    return {
+      category: 'Nghệ thuật, Âm nhạc & Văn hóa (Art & Culture)',
+      ideas: [
+        'Giá trị tinh thần & Cảm xúc: Mô tả âm nhạc/nghệ thuật như một liệu pháp tinh thần giúp thư giãn tâm trí và nuôi dưỡng cảm xúc tích cực.',
+        'Bảo tồn di sản văn hóa truyền thống: Nhấn mạnh thế hệ trẻ cần tiếp nối và phát huy các lễ hội, phong tục đặc sắc của dân tộc.',
+        'Giao lưu văn hóa toàn cầu: Phân tích cách phim ảnh, âm nhạc và văn học giúp kết nối các nền văn hóa đa dạng trên khắp thế giới.',
+      ],
+      vocabularies: [
+        'cultural heritage preservation (bảo tồn di sản văn hóa)',
+        'a therapeutic form of escapism (phương pháp giải trí chữa lành tâm hồn)',
+        'evoke deep emotions (gợi lên những cảm xúc sâu lắng)',
+        'artistic expression (sự biểu đạt mang tính nghệ thuật)',
+        'cross-cultural understanding (sự thấu hiểu liên văn hóa)',
+      ],
+    };
+  }
+
+  // Default General Category
+  return {
+    category: 'Chủ đề Tổng quát (General Topic)',
+    ideas: [
+      `Mở rộng góc nhìn cá nhân: Nêu rõ cảm xúc hoặc kỷ niệm đầu tiên liên quan đến chủ đề (${topic}).`,
+      'Đưa ra ví dụ thực tế (Real-world example): Dẫn chứng 1 tình huống cụ thể trong đời sống hoặc công việc để câu trả lời thuyết phục hơn.',
+      'Phản biện / So sánh tương phản: So sánh giữa quá khứ và hiện tại, hoặc giữa lợi ích tức thời và hệ quả lâu dài.',
+    ],
+    vocabularies: [
+      'play an indispensable role (đóng vai trò không thể thiếu)',
+      'a catalyst for personal growth (chất xúc tác cho sự phát triển bản thân)',
+      'cognitive bandwidth (dung lượng tâm trí / sự tập trung)',
+      'strike a balance between (đạt được sự cân bằng giữa)',
+      'without a shadow of a doubt (chắc chắn, không còn nghi ngờ gì)',
+    ],
+  };
+}
+
+// Basic grammar & orthography normalizer for local sentence improvement
+function sanitizeAndRefineSentence(text: string): string {
+  let s = text.trim();
+  if (!s) return s;
+
+  // 1. Fix capitalization of isolated 'i' and common contractions
+  s = s.replace(/\bi\b/g, 'I');
+  s = s.replace(/\bi'm\b/gi, "I'm");
+  s = s.replace(/\bi've\b/gi, "I've");
+  s = s.replace(/\bi'll\b/gi, "I'll");
+  s = s.replace(/\bi'd\b/gi, "I'd");
+
+  // 2. Fix missing apostrophes in common negative contractions
+  s = s.replace(/\bdont\b/gi, "don't");
+  s = s.replace(/\bdoesnt\b/gi, "doesn't");
+  s = s.replace(/\bcant\b/gi, "can't");
+  s = s.replace(/\bwont\b/gi, "won't");
+  s = s.replace(/\bisnt\b/gi, "isn't");
+  s = s.replace(/\barent\b/gi, "aren't");
+  s = s.replace(/\bwasnt\b/gi, "wasn't");
+  s = s.replace(/\bwerent\b/gi, "weren't");
+  s = s.replace(/\bhavent\b/gi, "haven't");
+  s = s.replace(/\bhasnt\b/gi, "hasn't");
+
+  // 3. Fix simple article errors: 'a' before common vowel words
+  s = s.replace(/\ba\s+(apple|orange|egg|idea|opportunity|issue|event|environment|important|interesting|essential|unbelievable|unusual)\b/gi, 'an $1');
+
+  // 4. Clean spacing & punctuation
+  s = s.replace(/\s+/g, ' ');
+  s = s.replace(/\s+([.,!?;:])/g, '$1');
+
+  // 5. Capitalize first letter
+  s = s.charAt(0).toUpperCase() + s.slice(1);
+
+  return s;
+}
 
 // Levenshtein distance helper
 function levenshteinDistance(s1: string, s2: string): number {
@@ -254,12 +676,12 @@ export async function POST(req: NextRequest) {
     let wordLevelPronunciation: WordPronunciationItem[] = [];
     let isAlignedWithTarget = false;
 
-    if (overlapRatio >= 0.35 && cleanRefQuestion.length >= 4) {
-      // User is reading or practicing the target question / prompt sentence
+    if (overlapRatio >= 0.65 && cleanRefQuestion.length >= 4) {
+      // User is reading or practicing the target question / prompt sentence (e.g. Shadowing / Read-aloud mode)
       isAlignedWithTarget = true;
       wordLevelPronunciation = alignWithReference(words, cleanRefQuestion);
     } else {
-      // Free speaking response -> Analyze all words phonetically
+      // Free speaking response -> Check pronunciation with enriched dictionary without falsely penalizing long words
       wordLevelPronunciation = words.map((rawWord: string) => {
         const cleanW = rawWord.toLowerCase().replace(/[^a-z]/g, '');
         const ipa = getWordIpa(cleanW);
@@ -272,17 +694,6 @@ export async function POST(req: NextRequest) {
             severity: item.severity,
             feedback: item.feedback,
             status: item.severity === 'heavy' ? 'mispronounced' : 'correct',
-          };
-        }
-
-        // Syllables check
-        const syllableCount = (cleanW.match(/[aeiouy]{1,2}/g) || []).length;
-        if (syllableCount >= 3) {
-          return {
-            word: rawWord,
-            ipa,
-            severity: 'light' as const,
-            feedback: `Từ đa âm tiết (${syllableCount} âm), chú ý nhấn đúng trọng âm chính`,
           };
         }
 
@@ -364,7 +775,9 @@ export async function POST(req: NextRequest) {
         name: 'Lexical Resource',
         nameVi: 'Vốn từ vựng & Độ chuẩn xác',
         score: lrScore,
-        feedback: `Độ đa dạng từ vựng đạt ${(ttr * 100).toFixed(0)}%. ${advancedFound.length > 0 ? `Từ vựng nổi bật: ${advancedFound.join(', ')}.` : 'Từ vựng rõ ràng, dễ hiểu.'}`,
+        feedback: actualWordCount < 30
+          ? `Câu trả lời còn khá ngắn (${actualWordCount} từ) để đánh giá chính xác vốn từ vựng — nên nói dài và mở rộng ý hơn.`
+          : `Độ đa dạng từ vựng đạt ${(ttr * 100).toFixed(0)}%. ${advancedFound.length > 0 ? `Từ vựng nổi bật: ${advancedFound.join(', ')}.` : 'Từ vựng rõ ràng, dễ hiểu.'}`,
         suggestion: 'Bổ sung collocations học thuật và phrasal verbs theo chủ đề.',
         details: `${uniqueWords.size} từ vựng khác nhau được sử dụng.`,
       },
@@ -372,7 +785,11 @@ export async function POST(req: NextRequest) {
         name: 'Grammatical Range & Accuracy',
         nameVi: 'Độ đa dạng & Chuẩn xác Ngữ pháp',
         score: graScore,
-        feedback: `Cấu trúc câu phong phú với ${foundComplex.length} mệnh đề liên kết.`,
+        feedback: foundComplex.length === 0
+          ? 'Câu trả lời chủ yếu dùng cấu trúc câu đơn giản, chưa có mệnh đề liên kết. Nên bổ sung các từ như "because", "which", "although" để tăng điểm.'
+          : foundComplex.length === 1
+          ? `Đã bắt đầu sử dụng mệnh đề liên kết ("${foundComplex[0]}"), tiếp tục phát huy.`
+          : `Cấu trúc câu khá phong phú với ${foundComplex.length} mệnh đề liên kết (${foundComplex.join(', ')}).`,
         suggestion: 'Kết hợp thêm câu điều kiện hoặc mệnh đề quan hệ để tăng điểm ngữ pháp.',
         details: 'Cấu trúc ngữ pháp duy trì chuẩn xác.',
       },
@@ -382,50 +799,62 @@ export async function POST(req: NextRequest) {
         score: pScore,
         feedback: isAlignedWithTarget
           ? `Đối chiếu với câu gốc: Phát hiện ${heavyErrors} từ đọc sai lệch âm, ${lightErrors} từ cần lưu ý trọng âm.`
-          : `Phát hiện ${heavyErrors} từ cần chú ý âm câm/trọng âm chính, ${lightErrors} từ đa âm tiết.`,
-        suggestion: 'Bấm vào từng từ bị gạch chân đỏ để nghe phát âm mẫu chuẩn và luyện đọc lại.',
+          : `Phát hiện ${heavyErrors} từ cần chú ý âm câm/trọng âm chính, ${lightErrors + minorErrors} từ thuộc nhóm phát âm nâng cao cần lưu ý.`,
+        suggestion: 'Bấm vào từng từ bị gạch chân để nghe phát âm mẫu chuẩn và luyện đọc lại.',
         details: 'Hệ thống so khớp âm vị học trực tiếp với từ gốc và từ điển IPA.',
       },
     ];
 
-    // ──────────────── Inline Grammar Corrections ────────────────
+    // ──────────────── Inline Corrections & Text Normalization ────────────────
+    const refinedTranscript = sanitizeAndRefineSentence(cleanTranscript);
     const insertedPhrases: string[] = [];
-    if (!cleanTranscript.toLowerCase().includes('to be honest') && !cleanTranscript.toLowerCase().includes('personally') && !cleanTranscript.toLowerCase().includes('in my opinion')) {
+    if (
+      !cleanTranscript.toLowerCase().includes('to be honest') &&
+      !cleanTranscript.toLowerCase().includes('personally') &&
+      !cleanTranscript.toLowerCase().includes('in my opinion') &&
+      !cleanTranscript.toLowerCase().includes('from my perspective')
+    ) {
       insertedPhrases.push('To be completely honest,');
     }
 
+    const formatLeadingText = (s: string) =>
+      s.startsWith('I ') || s.startsWith("I'") || s === 'I'
+        ? s
+        : s.charAt(0).toLowerCase() + s.slice(1);
+
     const correctedSentence = insertedPhrases.length > 0
-      ? `${insertedPhrases[0]} ${cleanTranscript.charAt(0).toLowerCase() + cleanTranscript.slice(1)}`
-      : cleanTranscript;
+      ? `${insertedPhrases[0]} ${formatLeadingText(refinedTranscript)}`
+      : refinedTranscript;
 
     const inlineCorrections: InlineCorrectionItem = {
       originalText: cleanTranscript,
       correctedText: correctedSentence,
       insertedPhrases,
       explanation: insertedPhrases.length > 0
-        ? `Đã thêm cụm từ mở đầu tự nhiên "${insertedPhrases[0]}" để tăng tính mạch lạc trong bài thi IELTS Speaking.`
-        : 'Cấu trúc ngữ pháp câu trả lời của bạn tương đối chuẩn xác.',
+        ? `Đã chuẩn hóa chính tả/ngữ pháp cơ bản và bổ sung cụm từ dẫn dắt tự nhiên "${insertedPhrases[0]}" để tăng tính mạch lạc cho bài thi Speaking.`
+        : 'Cấu trúc câu trả lời của bạn tương đối rõ ràng và chuẩn xác.',
     };
 
-    // ──────────────── Band 8.0+ Improved Version ────────────────
-    const cleanedTopicPrompt = questionText.toLowerCase().replace(/^(what|why|how|do you|are you|is there|describe)\s+/i, '').replace(/\?$/, '');
-    const improvedAnswer = `From my personal perspective, when it comes to ${cleanedTopicPrompt || topic.toLowerCase()}, ${cleanTranscript.length > 15 ? cleanTranscript : 'it plays an indispensable role in contemporary life'}. Furthermore, this not only broadens our cognitive horizons but also serves as a catalyst for long-term personal growth.`;
+    // ──────────────── Band 8.0+ Sentence Expansion (Mở rộng & Nâng cấp cấu trúc câu) ────────────────
+    let cleanedTopicPrompt = questionText
+      .toLowerCase()
+      .replace(/^(what|why|how|do you like|do you prefer|do you enjoy|do you think|do you have|do you|are you|is there|describe)\s+/i, '')
+      .replace(/\?$/, '')
+      .trim();
 
-    // ──────────────── Idea Expansion ────────────────
-    const ideaExpansion = [
-      `Mở rộng góc nhìn cá nhân: Nêu rõ cảm xúc hoặc kỷ niệm đầu tiên liên quan đến chủ đề (${topic}).`,
-      `Đưa ra ví dụ thực tế (Real-world example): Dẫn chứng 1 tình huống cụ thể trong đời sống hoặc công việc để câu trả lời thuyết phục hơn.`,
-      `Phản biện / So sánh tương phản: So sánh giữa quá khứ và hiện tại, hoặc giữa lợi ích tức thời và hệ quả lâu dài.`,
-    ];
+    if (cleanedTopicPrompt.startsWith('like ')) {
+      cleanedTopicPrompt = cleanedTopicPrompt.slice(5).trim();
+    }
 
-    // ──────────────── Vocabulary Suggestions ────────────────
-    const vocabularySuggestions = [
-      'play an indispensable role (đóng vai trò không thể thiếu)',
-      'a catalyst for growth (chất xúc tác cho sự phát triển)',
-      'cognitive bandwidth (dung lượng tâm trí / sự tập trung)',
-      'strike a balance between (đạt được sự cân bằng giữa)',
-      'without a shadow of a doubt (chắc chắn, không còn nghi ngờ gì)',
-    ];
+    const topicClean = (cleanedTopicPrompt || topic || 'this topic').toLowerCase();
+    const embeddedTranscript = refinedTranscript.replace(/[.!?]+$/, '');
+
+    const improvedAnswer = `From my personal perspective, when it comes to ${topicClean}, ${embeddedTranscript.length > 15 ? formatLeadingText(embeddedTranscript) : 'it plays an indispensable role in modern society'}. Furthermore, this not only broadens our cognitive horizons but also serves as a catalyst for long-term personal and intellectual development.`;
+
+    // ──────────────── Topic-Specific Idea Expansion & Vocabulary Suggestions ────────────────
+    const topicData = getTopicSuggestions(topic, questionText);
+    const ideaExpansion = topicData.ideas;
+    const vocabularySuggestions = topicData.vocabularies;
 
     return NextResponse.json({
       success: true,
