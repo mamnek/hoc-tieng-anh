@@ -41,7 +41,8 @@ export default function VideoHubPage() {
   const [youtubeUrl, setYoutubeUrl] = useState('');
   const [videoTitle, setVideoTitle] = useState('');
   const [isProcessing, setIsProcessing] = useState(false);
-  const [processingStep, setProcessingStep] = useState(0);
+  const [processingProgress, setProcessingProgress] = useState(5);
+  const [processingMessage, setProcessingMessage] = useState('Đang khởi tạo tác vụ xử lý video...');
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   useEffect(() => {
@@ -54,14 +55,6 @@ export default function VideoHubPage() {
     }
     return () => clearInterval(timer);
   }, [isProcessing]);
-
-  const processingSteps = [
-    'Đang kết nối & tải dữ liệu video...',
-    'Đang tách lời thoại theo mốc thời gian...',
-    'Đang dịch nghĩa tiếng Việt & tạo phiên âm IPA (toàn bộ video)...',
-    'Đang sinh câu hỏi Quiz & lưu bài học...',
-    'Hoàn tất!'
-  ];
 
   const filteredVideos = videos.filter((vid) => {
     const matchesSearch = vid.title.toLowerCase().includes(searchQuery.toLowerCase()) || vid.category.toLowerCase().includes(searchQuery.toLowerCase());
@@ -92,12 +85,12 @@ export default function VideoHubPage() {
     }
 
     setIsProcessing(true);
-    setProcessingStep(0);
+    setProcessingProgress(5);
+    setProcessingMessage('Đang kết nối và khởi tạo tác vụ xử lý ngầm (Background Task)...');
 
     try {
-      // Step 1: Call backend YouTube transcript fetcher API
-      setProcessingStep(1);
-      const res = await fetch('/api/youtube-transcript', {
+      // 1. Initiate background task on server (returns in < 50ms)
+      const res = await fetch('/api/video/process', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -106,72 +99,73 @@ export default function VideoHubPage() {
         }),
       });
 
-      setProcessingStep(2);
-      const resText = await res.text();
-      let data: any = {};
-      try {
-        if (resText && resText.trim()) {
-          data = JSON.parse(resText);
-        }
-      } catch (err) {
-        console.error('JSON Parse Error:', resText);
+      const data = await res.json();
+      if (!res.ok || !data.success || !data.taskId) {
         setIsProcessing(false);
-        alert(`❌ Lỗi máy chủ (Mã: ${res.status}): Phản hồi không đúng định dạng. Vui lòng thử lại!`);
+        alert(`❌ ${data.error || 'Không thể khởi tạo tác vụ phân tích video. Vui lòng thử lại!'}`);
         return;
       }
 
-      if (!res.ok || !data.success) {
-        setIsProcessing(false);
-        alert(`❌ ${data.error || 'Video này chưa được bật phụ đề tiếng Anh [CC]. Vui lòng thử video khác!'}`);
-        return;
-      }
+      const taskId = data.taskId;
 
-      setProcessingStep(3);
+      // 2. Poll /api/video/status every 2 seconds until READY or FAILED
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusRes = await fetch(`/api/video/status?taskId=${taskId}`);
+          if (!statusRes.ok) return;
+          const statusData = await statusRes.json();
+          if (!statusData.success || !statusData.task) return;
 
-      // Save real segments & quizzes into store for this youtubeId
-      const newVidId = addVideo({
-        sourceType: 'youtube',
-        youtubeId: ytId,
-        title: videoTitle.trim() || `Video YouTube (${ytId})`,
-        thumbnailUrl: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
-        durationSeconds: data.segments.length > 0 ? data.segments[data.segments.length - 1].endTime : 180,
-        category: 'Thực tế',
-        level: 'Trung cấp',
-        status: 'ready',
-        segmentsCount: data.segments.length,
-      });
+          const task = statusData.task;
+          setProcessingProgress(task.progress || 50);
+          setProcessingMessage(task.stepMessage || 'Đang xử lý dữ liệu...');
 
-      useAppStore.setState((state) => ({
-        videoSegments: {
-          ...state.videoSegments,
-          [newVidId]: data.segments,
-          [ytId]: data.segments,
-        },
-        videoQuizzes: {
-          ...state.videoQuizzes,
-          [newVidId]: data.quizzes,
-          [ytId]: data.quizzes,
-        },
-      }));
+          if (task.status === 'ready' && task.segments && task.segments.length > 0) {
+            clearInterval(pollInterval);
 
-      setProcessingStep(4);
+            // Save video and segments into store
+            const newVidId = addVideo({
+              sourceType: 'youtube',
+              youtubeId: ytId,
+              title: task.title || videoTitle.trim() || `Video YouTube (${ytId})`,
+              thumbnailUrl: `https://img.youtube.com/vi/${ytId}/hqdefault.jpg`,
+              durationSeconds: task.durationSeconds || (task.segments.length > 0 ? task.segments[task.segments.length - 1].endTime : 180),
+              category: 'Thực tế',
+              level: 'Trung cấp',
+              status: 'ready',
+              segmentsCount: task.segments.length,
+            });
 
-      // Notify user if video was truncated
-      if (data.truncated) {
-        const coveredMins = data.segments.length > 0 ? Math.floor(data.segments[data.segments.length - 1].endTime / 60) : 0;
-        alert(`⚠️ Video quá dài — đã xử lý ${data.segments.length} câu (tương ứng ~${coveredMins} phút đầu). Tổng phụ đề gốc: ${data.totalMerged || '?'} câu.`);
-      }
+            useAppStore.setState((state) => ({
+              videoSegments: {
+                ...state.videoSegments,
+                [newVidId]: task.segments,
+                [ytId]: task.segments,
+              },
+              videoQuizzes: {
+                ...state.videoQuizzes,
+                [newVidId]: task.quizzes || [],
+                [ytId]: task.quizzes || [],
+              },
+            }));
 
-      setTimeout(() => {
-        setIsProcessing(false);
-        setShowAddModal(false);
-        setYoutubeUrl('');
-        setVideoTitle('');
-        router.push(`/video/${newVidId}`);
-      }, 500);
-    } catch (error: any) {
+            setTimeout(() => {
+              setIsProcessing(false);
+              setShowAddModal(false);
+              setYoutubeUrl('');
+              setVideoTitle('');
+              router.push(`/video/${newVidId}`);
+            }, 600);
+          } else if (task.status === 'failed') {
+            clearInterval(pollInterval);
+            setIsProcessing(false);
+            alert(`❌ Lỗi phân tích video: ${task.error || 'Vui lòng thử lại!'}`);
+          }
+        } catch (_) {}
+      }, 2000);
+    } catch (err: any) {
       setIsProcessing(false);
-      alert(`❌ Lỗi kết nối: ${error?.message || 'Không thể kết nối đến máy chủ.'}`);
+      alert(`❌ Lỗi mạng: ${err?.message || 'Không thể kết nối máy chủ.'}`);
     }
   };
 
@@ -409,20 +403,20 @@ export default function VideoHubPage() {
                   <div className="w-16 h-16 bg-primary/10 text-primary rounded-full flex items-center justify-center mx-auto animate-pulse">
                     <Loader2 className="w-8 h-8 animate-spin" />
                   </div>
-                  <h4 className="text-xl font-bold text-gray-900 dark:text-white">Đang xử lý Video AI...</h4>
-                  <p className="text-sm text-primary font-medium">{processingSteps[processingStep]}</p>
+                  <h4 className="text-xl font-bold text-gray-900 dark:text-white">Đang xử lý Video AI ngầm...</h4>
+                  <p className="text-sm text-primary font-medium">{processingMessage}</p>
                   
                   {/* Progress bar */}
                   <div className="w-full bg-gray-100 dark:bg-gray-700 h-2 rounded-full overflow-hidden max-w-xs mx-auto">
                     <div
-                      className="bg-primary h-2 rounded-full transition-all duration-300"
-                      style={{ width: `${((processingStep + 1) / processingSteps.length) * 100}%` }}
+                      className="bg-primary h-2 rounded-full transition-all duration-500"
+                      style={{ width: `${processingProgress}%` }}
                     />
                   </div>
 
                   <div className="pt-2 text-xs text-gray-500 dark:text-gray-400 space-y-1 max-w-sm mx-auto">
-                    <p className="font-semibold text-primary/80">⏱️ Thời gian đã chạy: {elapsedSeconds} giây</p>
-                    <p>Hệ thống đang dịch toàn bộ lời thoại và sinh phiên âm IPA cho cả video. Với video dài (15–20 phút), quá trình xử lý mất khoảng 20–40 giây.</p>
+                    <p className="font-semibold text-primary/80">⏱️ Tiến độ: {processingProgress}% ({elapsedSeconds}s)</p>
+                    <p>Hệ thống đang chạy tác vụ phân tích ngầm và dịch nghĩa toàn bộ video. Bạn không cần lo lắng về lỗi timeout trên Render!</p>
                   </div>
                 </div>
               ) : (

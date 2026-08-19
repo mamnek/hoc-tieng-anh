@@ -134,7 +134,7 @@ async function batchTranslateToVietnamese(sentences: string[]): Promise<string[]
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { youtubeId, title } = body;
+    const { youtubeId, clientSegments, title } = body;
 
     if (!youtubeId || typeof youtubeId !== 'string') {
       return NextResponse.json(
@@ -148,10 +148,22 @@ export async function POST(req: NextRequest) {
     interface RawSeg { start: number; duration: number; text: string }
     let rawSegments: RawSeg[] = [];
 
-    // ─── TIER 1: Special Pre-transcribed / Animation Videos ───
+    // ─── TIER 0: Curated Transcripts ───
     if (SPECIAL_TRANSCRIPTS[youtubeId]) {
       console.log(`[YouTube Transcript] Found curated transcript for ${youtubeId}: ${SPECIAL_TRANSCRIPTS[youtubeId].length} segments`);
       rawSegments = [...SPECIAL_TRANSCRIPTS[youtubeId]];
+    }
+
+    // ─── TIER 1: Client-Side Subtitle Ingestion (From User Browser Residential IP) ───
+    if (rawSegments.length === 0 && clientSegments && Array.isArray(clientSegments) && clientSegments.length > 0) {
+      rawSegments = clientSegments
+        .map((item: any) => ({
+          start: Math.floor(Number(item.start) || 0),
+          duration: Math.ceil(Number(item.duration) || 3),
+          text: decodeHtmlEntities(String(item.text || '')),
+        }))
+        .filter((s) => s.text.length > 0);
+      console.log(`[YouTube Transcript] Received ${rawSegments.length} real segments directly from client browser!`);
     }
 
     // ─── TIER 2: YouTube Transcript NPM Library (Language Variations) ───
