@@ -18,6 +18,8 @@ import {
   Map as MapIcon,
   Video as VideoIcon,
   Mic,
+  Swords,
+  BookOpenCheck,
   LogOut
 } from "lucide-react";
 
@@ -31,6 +33,8 @@ interface SidebarProps {
 const getIcon = (iconName: string) => {
   switch (iconName) {
     case 'Home': return Home;
+    case 'BookOpenCheck': return BookOpenCheck;
+    case 'Swords': return Swords;
     case 'Mic': return Mic;
     case 'Video': return VideoIcon;
     case 'FolderOpen': return FolderOpen;

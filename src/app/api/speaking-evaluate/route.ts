@@ -595,13 +595,17 @@ function alignWithReference(
         });
       } else {
         // Mispronounced / Substituted word
+        const dist = levenshteinDistance(cleanSpoken, cleanRef);
+        const isMinorDiff = dist <= 2;
         result.push({
           word: item.spoken,
           targetWord: item.ref,
           ipa: refIpa,
-          severity: 'heavy',
+          severity: isMinorDiff ? 'light' : 'heavy',
           status: 'mispronounced',
-          feedback: `Phát âm sai từ gốc "${item.ref}" (${refIpa}) thành "${item.spoken}"`,
+          feedback: isMinorDiff
+            ? `Phát âm lệch nhẹ so với từ gốc "${item.ref}" (${refIpa}) thành "${item.spoken}"`
+            : `Phát âm sai từ gốc "${item.ref}" (${refIpa}) thành "${item.spoken}"`,
         });
       }
     } else if (item.spoken && !item.ref) {
@@ -653,35 +657,28 @@ export async function POST(req: NextRequest) {
     }
 
     const words = cleanTranscript.split(/\s+/).filter(Boolean);
+    const spokenLower = words.map((w: string) => w.toLowerCase().replace(/[^a-z]/g, ''));
     const actualWordCount = words.length;
     const durationMin = Math.max(0.1, (durationSeconds || 25) / 60);
     const wpm = Math.round(actualWordCount / durationMin);
 
-    // ──────────────── 1. Reference Sentence Analysis ────────────────
+    // ──────────────── 1. Reference Sentence Analysis & Alignment ────────────────
     const cleanRefQuestion = questionText
-      .replace(/[?!.,;]/g, '')
+      .replace(/&/g, ' and ')
+      .replace(/[^a-zA-Z0-9\s]/g, ' ')
       .split(/\s+/)
+      .map((w: string) => w.trim())
       .filter(Boolean);
-
-    // Check if the user is reading/repeating the question prompt or parts of it
-    const spokenLower = words.map((w: string) => w.toLowerCase().replace(/[^a-z]/g, ''));
-    const refLower = cleanRefQuestion.map((w: string) => w.toLowerCase().replace(/[^a-z]/g, ''));
-    
-    let commonWordMatches = 0;
-    for (const sw of spokenLower) {
-      if (refLower.includes(sw)) commonWordMatches++;
-    }
-    const overlapRatio = cleanRefQuestion.length > 0 ? commonWordMatches / cleanRefQuestion.length : 0;
 
     let wordLevelPronunciation: WordPronunciationItem[] = [];
     let isAlignedWithTarget = false;
 
-    if (overlapRatio >= 0.65 && cleanRefQuestion.length >= 4) {
-      // User is reading or practicing the target question / prompt sentence (e.g. Shadowing / Read-aloud mode)
+    if (cleanRefQuestion.length >= 2) {
+      // Compare spoken transcript against target reference question / sentence
       isAlignedWithTarget = true;
       wordLevelPronunciation = alignWithReference(words, cleanRefQuestion);
     } else {
-      // Free speaking response -> Check pronunciation with enriched dictionary without falsely penalizing long words
+      // Standalone free speaking without reference sentence
       wordLevelPronunciation = words.map((rawWord: string) => {
         const cleanW = rawWord.toLowerCase().replace(/[^a-z]/g, '');
         const ipa = getWordIpa(cleanW);
@@ -706,24 +703,74 @@ export async function POST(req: NextRequest) {
       });
     }
 
-    // ──────────────── Count Error Severities ────────────────
+    // ──────────────── 1. Pronunciation (P) Evaluation ────────────────
     const heavyErrors = wordLevelPronunciation.filter((w) => w.severity === 'heavy').length;
     const lightErrors = wordLevelPronunciation.filter((w) => w.severity === 'light').length;
     const minorErrors = wordLevelPronunciation.filter((w) => w.severity === 'minor').length;
+    const correctWords = wordLevelPronunciation.filter((w) => w.status === 'correct').length;
+    const totalAssessedWords = Math.max(1, wordLevelPronunciation.length);
+
+    let pScore = 6.0;
+    const refCount = cleanRefQuestion.length;
+    const matchRatio = refCount > 0 ? correctWords / refCount : 0;
+    const severeCount = wordLevelPronunciation.filter(
+      (w) => w.status === 'omitted' || (w.status === 'mispronounced' && w.severity === 'heavy')
+    ).length;
+    const severeRatio = refCount > 0 ? severeCount / refCount : 0;
+
+    if (actualWordCount <= 2) {
+      // 1-2 words only (e.g. "okay") -> Examiner gives Band 1.0 - 1.5
+      pScore = 1.5;
+    } else if (actualWordCount <= 5) {
+      // 3-5 words only -> Band 2.5 - 3.0
+      pScore = matchRatio >= 0.6 ? 4.5 : 2.5;
+    } else if (isAlignedWithTarget && refCount > 0 && (matchRatio >= 0.35 || actualWordCount < 12)) {
+      // Reading / Shadowing target sentence
+      if (matchRatio >= 0.90 && severeRatio === 0) pScore = 8.5;
+      else if (matchRatio >= 0.80 && severeRatio <= 0.15) pScore = 7.5;
+      else if (matchRatio >= 0.65 && severeRatio <= 0.30) pScore = 6.5;
+      else if (matchRatio >= 0.50 && severeRatio <= 0.45) pScore = 5.5;
+      else if (matchRatio >= 0.30 && severeRatio <= 0.65) pScore = 4.5;
+      else pScore = 3.5;
+    } else {
+      // Free speaking response (answering question with candidate's own sentences)
+      if (actualWordCount < 12) {
+        pScore = 4.0;
+      } else {
+        const errorRatio = (heavyErrors * 2 + lightErrors) / totalAssessedWords;
+        if (errorRatio <= 0.05 && actualWordCount >= 20) pScore = 8.0;
+        else if (errorRatio <= 0.12 && actualWordCount >= 15) pScore = 7.0;
+        else if (errorRatio <= 0.22) pScore = 6.0;
+        else if (errorRatio <= 0.40) pScore = 5.0;
+        else pScore = 4.0;
+      }
+    }
+    pScore = Math.min(9.0, Math.max(1.0, Math.round(pScore * 2) / 2));
 
     // ──────────────── 2. Fluency & Coherence (FC) ────────────────
     let fcScore = 6.0;
     const fillerMatches = cleanTranscript.match(/\b(um|uh|er|like|you know|sort of|kind of)\b/gi) || [];
     const linkingMatches = LINKING_WORDS.filter((lw) => cleanTranscript.toLowerCase().includes(lw));
 
-    if (wpm >= 110 && wpm <= 155) fcScore += 0.5;
-    else if (wpm < 85) fcScore -= 0.5;
+    if (actualWordCount <= 2) {
+      fcScore = 1.0;
+    } else if (actualWordCount <= 6) {
+      fcScore = 2.5;
+    } else if (actualWordCount <= 14) {
+      fcScore = 4.0;
+      if (wpm >= 90 && wpm <= 160) fcScore += 0.5;
+    } else {
+      fcScore = 5.5;
+      if (wpm >= 105 && wpm <= 160) fcScore += 0.5;
+      else if (wpm < 70) fcScore -= 0.5;
 
-    if (linkingMatches.length >= 2) fcScore += 0.5;
-    if (fillerMatches.length > 3) fcScore -= 0.5;
-    if (actualWordCount >= (part === 2 ? 70 : 25)) fcScore += 0.5;
+      if (linkingMatches.length >= 2) fcScore += 1.0;
+      else if (linkingMatches.length === 1) fcScore += 0.5;
 
-    fcScore = Math.min(8.5, Math.max(5.0, Math.round(fcScore * 2) / 2));
+      if (fillerMatches.length > 4) fcScore -= 0.5;
+      if (actualWordCount >= (part === 2 ? 80 : 30)) fcScore += 0.5;
+    }
+    fcScore = Math.min(9.0, Math.max(1.0, Math.round(fcScore * 2) / 2));
 
     // ──────────────── 3. Lexical Resource (LR) ────────────────
     let lrScore = 6.0;
@@ -731,35 +778,58 @@ export async function POST(req: NextRequest) {
     const ttr = spokenLower.length > 0 ? uniqueWords.size / spokenLower.length : 0.5;
     const advancedFound = ADVANCED_VOCAB.filter((av) => cleanTranscript.toLowerCase().includes(av));
 
-    if (advancedFound.length >= 2) lrScore += 1.0;
-    else if (advancedFound.length === 1) lrScore += 0.5;
+    if (actualWordCount <= 2) {
+      lrScore = 1.0;
+    } else if (actualWordCount <= 6) {
+      lrScore = 2.5;
+    } else if (actualWordCount <= 14) {
+      lrScore = 4.0;
+      if (advancedFound.length >= 1) lrScore += 0.5;
+    } else {
+      lrScore = 5.5;
+      if (advancedFound.length >= 3) lrScore += 1.5;
+      else if (advancedFound.length === 2) lrScore += 1.0;
+      else if (advancedFound.length === 1) lrScore += 0.5;
 
-    if (ttr >= 0.7) lrScore += 0.5;
-    else if (ttr < 0.45) lrScore -= 0.5;
-
-    lrScore = Math.min(8.5, Math.max(5.0, Math.round(lrScore * 2) / 2));
+      if (ttr >= 0.70 && actualWordCount >= 25) lrScore += 0.5;
+      else if (ttr < 0.40) lrScore -= 0.5;
+    }
+    lrScore = Math.min(9.0, Math.max(1.0, Math.round(lrScore * 2) / 2));
 
     // ──────────────── 4. Grammatical Range & Accuracy (GRA) ────────────────
     let graScore = 6.0;
     const complexMarkers = ['because', 'although', 'even though', 'which', 'who', 'that', 'if', 'while', 'whereas', 'unless', 'since', 'so that', 'in order to'];
     const foundComplex = complexMarkers.filter((cm) => cleanTranscript.toLowerCase().includes(` ${cm} `) || cleanTranscript.toLowerCase().startsWith(`${cm} `));
 
-    if (foundComplex.length >= 2) graScore += 0.5;
-    if (cleanTranscript.includes(',') || cleanTranscript.includes(';')) graScore += 0.5;
-    if (actualWordCount > 35) graScore += 0.5;
+    if (actualWordCount <= 2) {
+      graScore = 1.0;
+    } else if (actualWordCount <= 6) {
+      graScore = 2.5;
+    } else if (actualWordCount <= 14) {
+      graScore = 4.0;
+      if (foundComplex.length >= 1) graScore += 0.5;
+    } else {
+      graScore = 5.5;
+      if (foundComplex.length >= 2) graScore += 1.0;
+      else if (foundComplex.length === 1) graScore += 0.5;
 
-    graScore = Math.min(8.5, Math.max(5.0, Math.round(graScore * 2) / 2));
+      if (cleanTranscript.includes(',') || cleanTranscript.includes(';')) graScore += 0.5;
+      if (actualWordCount >= 35) graScore += 0.5;
+    }
+    graScore = Math.min(9.0, Math.max(1.0, Math.round(graScore * 2) / 2));
 
-    // ──────────────── 5. Pronunciation (P) ────────────────
-    let pScore = 6.5;
-    if (heavyErrors >= 3) pScore = 5.0;
-    else if (heavyErrors === 2) pScore = 5.5;
-    else if (heavyErrors === 1) pScore = 6.0;
-    else if (lightErrors <= 1 && heavyErrors === 0) pScore = 7.5;
-
-    // Overall Band
+    // ──────────────── Overall Band Calculation (Official IELTS Rounding) ────────────────
     const rawAverage = (fcScore + lrScore + graScore + pScore) / 4;
-    const overallBand = Math.round(rawAverage * 2) / 2;
+    const decimal = rawAverage - Math.floor(rawAverage);
+    let overallBand = Math.floor(rawAverage);
+    if (decimal >= 0.75) {
+      overallBand = Math.ceil(rawAverage);
+    } else if (decimal >= 0.25) {
+      overallBand = Math.floor(rawAverage) + 0.5;
+    } else {
+      overallBand = Math.floor(rawAverage);
+    }
+    overallBand = Math.min(9.0, Math.max(1.0, overallBand));
 
     // ──────────────── Criteria Score Details ────────────────
     const criteriaScores: CriteriaScoreDetail[] = [
@@ -767,40 +837,56 @@ export async function POST(req: NextRequest) {
         name: 'Fluency & Coherence',
         nameVi: 'Độ trôi chảy & Mạch lạc',
         score: fcScore,
-        feedback: `Tốc độ nói ~${wpm} WPM. ${linkingMatches.length > 0 ? `Đã dùng tốt ${linkingMatches.length} từ nối.` : 'Cần thêm từ nối để tăng độ mượt mà.'}`,
-        suggestion: 'Sử dụng thêm các cụm dẫn dắt tự nhiên như "To be honest", "From my perspective".',
-        details: `Nói được ${actualWordCount} từ trong ${durationSeconds}s.`,
+        feedback: actualWordCount <= 2
+          ? `Câu trả lời quá ngắn (${actualWordCount} từ), chưa đủ để hình thành mạch nói.`
+          : actualWordCount < 15
+          ? `Tốc độ ~${wpm} WPM. Câu trả lời còn ngắn (${actualWordCount} từ), cần phát triển ý dài hơn.`
+          : `Tốc độ nói ~${wpm} WPM. ${linkingMatches.length > 0 ? `Đã dùng tốt ${linkingMatches.length} từ nối.` : 'Cần bổ sung thêm từ nối để tăng độ mượt mà.'}`,
+        suggestion: actualWordCount < 15
+          ? 'Nói tối thiểu 2-3 câu hoàn chỉnh cho mỗi câu hỏi Part 1.'
+          : 'Sử dụng thêm các cụm dẫn dắt tự nhiên như "To be honest", "From my perspective".',
+        details: `Nói được ${actualWordCount} từ trong ${durationSeconds}s (~${wpm} WPM).`,
       },
       {
         name: 'Lexical Resource',
         nameVi: 'Vốn từ vựng & Độ chuẩn xác',
         score: lrScore,
-        feedback: actualWordCount < 30
-          ? `Câu trả lời còn khá ngắn (${actualWordCount} từ) để đánh giá chính xác vốn từ vựng — nên nói dài và mở rộng ý hơn.`
+        feedback: actualWordCount <= 2
+          ? `Chỉ có ${actualWordCount} từ — chưa thể hiện được vốn từ vựng.`
+          : actualWordCount < 20
+          ? `Câu trả lời còn ngắn (${actualWordCount} từ), từ vựng còn ở mức rất cơ bản.`
           : `Độ đa dạng từ vựng đạt ${(ttr * 100).toFixed(0)}%. ${advancedFound.length > 0 ? `Từ vựng nổi bật: ${advancedFound.join(', ')}.` : 'Từ vựng rõ ràng, dễ hiểu.'}`,
-        suggestion: 'Bổ sung collocations học thuật và phrasal verbs theo chủ đề.',
+        suggestion: actualWordCount < 20
+          ? 'Mở rộng câu trả lời bằng cách dùng tính từ miêu tả và danh từ cụ thể.'
+          : 'Bổ sung collocations học thuật và phrasal verbs theo chủ đề.',
         details: `${uniqueWords.size} từ vựng khác nhau được sử dụng.`,
       },
       {
         name: 'Grammatical Range & Accuracy',
         nameVi: 'Độ đa dạng & Chuẩn xác Ngữ pháp',
         score: graScore,
-        feedback: foundComplex.length === 0
+        feedback: actualWordCount <= 2
+          ? `Chưa có cấu trúc câu hoàn chỉnh.`
+          : foundComplex.length === 0
           ? 'Câu trả lời chủ yếu dùng cấu trúc câu đơn giản, chưa có mệnh đề liên kết. Nên bổ sung các từ như "because", "which", "although" để tăng điểm.'
           : foundComplex.length === 1
           ? `Đã bắt đầu sử dụng mệnh đề liên kết ("${foundComplex[0]}"), tiếp tục phát huy.`
           : `Cấu trúc câu khá phong phú với ${foundComplex.length} mệnh đề liên kết (${foundComplex.join(', ')}).`,
         suggestion: 'Kết hợp thêm câu điều kiện hoặc mệnh đề quan hệ để tăng điểm ngữ pháp.',
-        details: 'Cấu trúc ngữ pháp duy trì chuẩn xác.',
+        details: actualWordCount < 10 ? 'Cần cấu trúc câu đầy đủ S + V + O.' : 'Cấu trúc ngữ pháp duy trì chuẩn xác.',
       },
       {
         name: 'Pronunciation',
         nameVi: 'Phát âm & Ngữ điệu',
         score: pScore,
         feedback: isAlignedWithTarget
-          ? `Đối chiếu với câu gốc: Phát hiện ${heavyErrors} từ đọc sai lệch âm, ${lightErrors} từ cần lưu ý trọng âm.`
-          : `Phát hiện ${heavyErrors} từ cần chú ý âm câm/trọng âm chính, ${lightErrors + minorErrors} từ thuộc nhóm phát âm nâng cao cần lưu ý.`,
-        suggestion: 'Bấm vào từng từ bị gạch chân để nghe phát âm mẫu chuẩn và luyện đọc lại.',
+          ? (correctWords === 0 && wordLevelPronunciation.length > 0
+              ? `Đối chiếu với câu gốc: Bỏ sót hoặc đọc sai phần lớn câu gốc (${heavyErrors} từ sai/bỏ sót).`
+              : `Đối chiếu với câu gốc: Đọc chuẩn ${correctWords}/${cleanRefQuestion.length} từ, phát hiện ${heavyErrors} từ sai/bỏ sót, ${lightErrors} từ cần lưu ý.`)
+          : (actualWordCount <= 2
+              ? `Chưa đủ dữ liệu âm vị học để đánh giá phát âm.`
+              : `Phát hiện ${heavyErrors} từ cần chú ý âm câm/trọng âm chính, ${lightErrors + minorErrors} từ cần lưu ý.`),
+        suggestion: 'Bấm vào từng từ bị gạch chân đỏ để nghe phát âm mẫu chuẩn và luyện đọc lại.',
         details: 'Hệ thống so khớp âm vị học trực tiếp với từ gốc và từ điển IPA.',
       },
     ];

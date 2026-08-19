@@ -411,7 +411,7 @@ export function SpeakingResultView({
                           {isMispronounced ? 'Sai lệch so với từ gốc:' : 'Lưu ý phát âm:'}
                         </strong>
                         {item.feedback}
-                        <span className="block text-[10px] text-emerald-400 mt-1 font-semibold">🔊 Bấm để nghe đọc mẫu '{targetTextToSpeak}'</span>
+                        <span className="block text-[10px] text-emerald-400 mt-1 font-semibold">🔊 Bấm để nghe đọc mẫu &apos;{targetTextToSpeak}&apos;</span>
                       </span>
                     )}
                   </button>
@@ -545,22 +545,53 @@ export function SpeakingResultView({
                 </ResponsiveContainer>
               </div>
 
-              <div className="w-full pt-4 border-t border-gray-100 dark:border-gray-700 flex justify-around text-center text-xs">
-                <div>
-                  <span className="text-gray-400 block">FC (Trôi chảy)</span>
-                  <strong className="text-gray-900 dark:text-white">{answer.criteriaScores[0]?.score || 6.0}</strong>
+              <div className="w-full pt-4 border-t border-gray-100 dark:border-gray-700 flex flex-col gap-3">
+                {/* 4 Criteria Scores */}
+                <div className="grid grid-cols-4 gap-2 text-center text-xs">
+                  <div className="bg-gray-50 dark:bg-gray-750 p-2 rounded-xl border border-gray-100 dark:border-gray-700/60">
+                    <span className="text-gray-400 block text-[11px]">FC (Trôi chảy)</span>
+                    <strong className="text-gray-900 dark:text-white text-sm">{(answer.criteriaScores[0]?.score || 0).toFixed(1)}</strong>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-750 p-2 rounded-xl border border-gray-100 dark:border-gray-700/60">
+                    <span className="text-gray-400 block text-[11px]">LR (Từ vựng)</span>
+                    <strong className="text-gray-900 dark:text-white text-sm">{(answer.criteriaScores[1]?.score || 0).toFixed(1)}</strong>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-750 p-2 rounded-xl border border-gray-100 dark:border-gray-700/60">
+                    <span className="text-gray-400 block text-[11px]">GRA (Ngữ pháp)</span>
+                    <strong className="text-gray-900 dark:text-white text-sm">{(answer.criteriaScores[2]?.score || 0).toFixed(1)}</strong>
+                  </div>
+                  <div className="bg-gray-50 dark:bg-gray-750 p-2 rounded-xl border border-gray-100 dark:border-gray-700/60">
+                    <span className="text-gray-400 block text-[11px]">P (Phát âm)</span>
+                    <strong className="text-gray-900 dark:text-white text-sm">{(answer.criteriaScores[3]?.score || 0).toFixed(1)}</strong>
+                  </div>
                 </div>
-                <div>
-                  <span className="text-gray-400 block">LR (Từ vựng)</span>
-                  <strong className="text-gray-900 dark:text-white">{answer.criteriaScores[1]?.score || 6.0}</strong>
-                </div>
-                <div>
-                  <span className="text-gray-400 block">GRA (Ngữ pháp)</span>
-                  <strong className="text-gray-900 dark:text-white">{answer.criteriaScores[2]?.score || 6.0}</strong>
-                </div>
-                <div>
-                  <span className="text-gray-400 block">P (Phát âm)</span>
-                  <strong className="text-gray-900 dark:text-white">{answer.criteriaScores[3]?.score || 6.5}</strong>
+
+                {/* Prominent Overall IELTS Band Badge */}
+                <div className="flex items-center justify-between bg-gradient-to-r from-primary/10 via-purple-500/10 to-pink-500/10 dark:from-primary/20 dark:via-purple-500/20 dark:to-pink-500/20 p-3.5 px-4 rounded-2xl border border-primary/20">
+                  <div className="flex items-center gap-2.5">
+                    <Award className="w-5 h-5 text-primary shrink-0" />
+                    <div>
+                      <span className="text-xs font-bold text-gray-800 dark:text-gray-200 block">ĐIỂM TỔNG IELTS SPEAKING</span>
+                      <span className="text-[11px] text-gray-500 dark:text-gray-400">
+                        {answer.overallBand >= 8.0
+                          ? 'C2 - Xuất sắc (Very Good / Expert)'
+                          : answer.overallBand >= 7.0
+                          ? 'C1 - Tốt (Good User)'
+                          : answer.overallBand >= 6.0
+                          ? 'B2 - Khá (Competent User)'
+                          : answer.overallBand >= 5.0
+                          ? 'B1 - Trung bình (Modest User)'
+                          : answer.overallBand >= 4.0
+                          ? 'A2 - Hạn chế (Limited User)'
+                          : 'A1 - Mức độ cơ bản / Cần luyện tập'}
+                      </span>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-2xl font-black text-primary">
+                      {answer.overallBand.toFixed(1)}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>
@@ -595,7 +626,7 @@ export function SpeakingResultView({
             </div>
 
             <p className="text-base sm:text-lg text-gray-800 dark:text-gray-100 leading-relaxed font-medium bg-white/70 dark:bg-gray-800/70 p-5 rounded-2xl border border-purple-100 dark:border-purple-900/30">
-              "{answer.improvedAnswer}"
+              &ldquo;{answer.improvedAnswer}&rdquo;
             </p>
 
             <div className="flex flex-wrap items-center gap-3 pt-2">

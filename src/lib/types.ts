@@ -262,3 +262,51 @@ export interface SpeakingErrorReport {
   createdAt: string;
 }
 
+// ──────────────── IELTS Vocab Battle Arena Types ────────────────
+export interface BattlePlayer {
+  id: string;
+  username: string;
+  avatar?: string;
+  hp: number; // 0 - 100
+  score: number;
+  combo: number;
+  isReady: boolean;
+  isHost?: boolean;
+  isBot?: boolean;
+  streak: number;
+}
+
+export interface BattleQuestion {
+  roundId: number;
+  wordEn: string;
+  wordVi: string;
+  ipa?: string;
+  hint: string;
+  hiddenEn: string;
+  category?: string;
+  timeLimit: number; // seconds
+  options?: string[]; // for MCQ/collocations
+}
+
+export interface BattleRoundResult {
+  roundId: number;
+  winnerId?: string;
+  winnerName?: string;
+  correctAnswer: string;
+  explanation?: string;
+  players: Record<string, BattlePlayer>;
+  damageDealt?: number;
+}
+
+export interface BattleGameOver {
+  winnerId: string;
+  winnerName: string;
+  isDraw?: boolean;
+  finalPlayers: Record<string, BattlePlayer>;
+  coinsGained: number;
+  expGained: number;
+  roundsPlayed: number;
+  totalWordsReviewed: number;
+}
+
+

@@ -87,6 +87,8 @@ export const GAME_MODES = [
 
 export const NAV_ITEMS = [
   { path: '/', label: 'Trang chủ', icon: 'Home' },
+  { path: '/reading', label: 'Luyện đọc & Scan', icon: 'BookOpenCheck', hot: true },
+  { path: '/battle', label: 'Đấu trường Vocab', icon: 'Swords', hot: true },
   { path: '/speaking', label: 'Luyện nói IELTS', icon: 'Mic' },
   { path: '/video', label: 'Học qua Video', icon: 'Video' },
   { path: '/word-sets', label: 'Bộ từ vựng', icon: 'FolderOpen' },
