@@ -30,10 +30,11 @@ interface AppState {
   currentUser: User | null;
   isAuthenticated: boolean;
   user: User; // For backwards compatibility
-  registerUser: (name: string, email: string, password?: string) => { success: boolean; error?: string };
-  loginUser: (email: string, password?: string) => { success: boolean; error?: string };
+  registerUser: (name: string, email: string, password?: string) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
+  loginUser: (email: string, password?: string) => Promise<{ success: boolean; error?: string }> | { success: boolean; error?: string };
   logoutUser: () => void;
   updateUser: (updates: Partial<User>) => void;
+  syncCloudData: () => Promise<void>;
 
   // Word Sets
   wordSets: WordSet[];
@@ -176,8 +177,34 @@ export const useAppStore = create<AppState>()(
       isAuthenticated: true,
       user: defaultUser,
 
-      registerUser: (name, email, password) => {
+      registerUser: async (name, email, password) => {
         const normalizedEmail = email.trim().toLowerCase();
+
+        // 1. Try Cloud Register via MongoDB
+        try {
+          const res = await fetch('/api/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name, email: normalizedEmail, password }),
+          });
+          const data = await res.json();
+          if (data.success && data.user) {
+            const user: User = data.user;
+            set((state) => ({
+              users: [...state.users.filter((u) => u.email.toLowerCase() !== normalizedEmail), user],
+              currentUser: user,
+              isAuthenticated: true,
+              user,
+            }));
+            return { success: true };
+          } else if (data.error) {
+            return { success: false, error: data.error };
+          }
+        } catch (_) {
+          // Fallback to local storage if offline
+        }
+
+        // Local fallback
         const existing = get().users.find((u) => u.email.toLowerCase() === normalizedEmail);
         if (existing) {
           return { success: false, error: 'Email này đã được đăng ký tài khoản!' };
@@ -188,10 +215,10 @@ export const useAppStore = create<AppState>()(
           name: name.trim(),
           email: normalizedEmail,
           password: password || '',
-          avatarUrl: '',
-          streakCount: 0,
+          avatarUrl: `https://api.dicebear.com/7.x/bottts/svg?seed=${encodeURIComponent(name)}`,
+          streakCount: 1,
           lastActiveDate: new Date().toISOString(),
-          coins: 0,
+          coins: 50,
           createdAt: new Date().toISOString(),
         };
 
@@ -205,8 +232,52 @@ export const useAppStore = create<AppState>()(
         return { success: true };
       },
 
-      loginUser: (email, password) => {
+      loginUser: async (email, password) => {
         const normalizedEmail = email.trim().toLowerCase();
+
+        // 1. Try Cloud Login via MongoDB
+        try {
+          const res = await fetch('/api/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: normalizedEmail, password }),
+          });
+          const data = await res.json();
+          if (data.success && data.user) {
+            const user: User = data.user;
+            const updates: any = {
+              currentUser: user,
+              isAuthenticated: true,
+              user,
+              users: [...get().users.filter((u) => u.email.toLowerCase() !== normalizedEmail), user],
+            };
+
+            // Restore cloud data if available
+            if (data.cloudData) {
+              if (data.cloudData.progress && data.cloudData.progress.length > 0) {
+                updates.progress = data.cloudData.progress;
+              }
+              if (data.cloudData.wordSets && data.cloudData.wordSets.length > 0) {
+                updates.wordSets = data.cloudData.wordSets;
+              }
+              if (data.cloudData.words && data.cloudData.words.length > 0) {
+                updates.words = data.cloudData.words;
+              }
+              if (data.cloudData.sessions && data.cloudData.sessions.length > 0) {
+                updates.sessions = data.cloudData.sessions;
+              }
+            }
+
+            set(updates);
+            return { success: true };
+          } else if (data.error) {
+            return { success: false, error: data.error };
+          }
+        } catch (_) {
+          // Fallback to local storage
+        }
+
+        // Local fallback
         const found = get().users.find((u) => u.email.toLowerCase() === normalizedEmail);
         if (!found) {
           return { success: false, error: 'Email hoặc mật khẩu không chính xác!' };
@@ -233,7 +304,7 @@ export const useAppStore = create<AppState>()(
         });
       },
 
-      updateUser: (updates) =>
+      updateUser: (updates) => {
         set((state) => {
           const target = state.currentUser || state.user;
           const updatedUser = { ...target, ...updates };
@@ -244,7 +315,42 @@ export const useAppStore = create<AppState>()(
               ? state.users.map((u) => (u.id === state.currentUser?.id ? updatedUser : u))
               : state.users,
           };
-        }),
+        });
+
+        // Trigger background sync to MongoDB
+        setTimeout(() => {
+          get().syncCloudData();
+        }, 500);
+      },
+
+      syncCloudData: async () => {
+        const state = get();
+        const user = state.currentUser;
+        if (!user || !user.id || user.id === 'user-guest') return;
+
+        try {
+          await fetch('/api/user/sync', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              userId: user.id,
+              userUpdates: {
+                coins: user.coins,
+                streakCount: user.streakCount,
+                lastActiveDate: user.lastActiveDate,
+                avatarUrl: user.avatarUrl,
+              },
+              progress: state.progress,
+              wordSets: state.wordSets.filter((s) => !s.isPreset),
+              words: state.words.filter((w) => state.wordSets.some((s) => s.id === w.wordSetId && !s.isPreset)),
+              sessions: state.sessions.slice(-50),
+              speakingAttempts: state.speakingAttempts.slice(-20),
+            }),
+          });
+        } catch (_) {
+          // Ignore background sync errors
+        }
+      },
 
       // Word Sets
       wordSets: presetWordSets.map((s) => ({

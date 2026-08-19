@@ -20,9 +20,32 @@ const mockUsers = [
 ];
 
 export default function LeaderboardPage() {
-  const { user, chatMessages, addChatMessage } = useAppStore();
+  const { user, currentUser, chatMessages, addChatMessage } = useAppStore();
+  const activeUser = currentUser || user;
   const [messageText, setMessageText] = useState('');
+  const [cloudLeaderboard, setCloudLeaderboard] = useState<any[]>([]);
   const chatEndRef = useRef<HTMLDivElement>(null);
+
+  // Fetch real cloud leaderboard on mount
+  useEffect(() => {
+    fetch('/api/leaderboard')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data && data.success && Array.isArray(data.leaderboard) && data.leaderboard.length > 0) {
+          setCloudLeaderboard(
+            data.leaderboard.map((u: any) => ({
+              id: u.id,
+              name: u.name,
+              avatar: u.avatarUrl ? '👤' : '🧑',
+              avatarUrl: u.avatarUrl,
+              streak: u.streakCount || 1,
+              coins: u.coins || 50,
+            }))
+          );
+        }
+      })
+      .catch(() => {});
+  }, []);
 
   // Generate heatmap data
   const heatmapData = Array.from({ length: 140 }).map((_, i) => ({
@@ -48,9 +71,9 @@ export default function LeaderboardPage() {
     chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [chatMessages]);
 
-  const sortedUsers = [...mockUsers].sort((a, b) => b.streak - a.streak);
-  // Inject current user into mock list if not present, just for demo
-  const userRank = 4; // Mock rank for current user
+  const displayList = cloudLeaderboard.length > 0 ? cloudLeaderboard : mockUsers;
+  const sortedUsers = [...displayList].sort((a, b) => (b.coins || b.streak) - (a.coins || a.streak));
+  const userRank = sortedUsers.findIndex((u) => u.id === activeUser.id || u.name === activeUser.name) + 1 || 1;
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-7xl">

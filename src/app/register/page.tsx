@@ -17,7 +17,7 @@ export default function RegisterPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -43,15 +43,18 @@ export default function RegisterPage() {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = registerUser(name, email, password);
+    try {
+      const res = await registerUser(name, email, password);
       setIsLoading(false);
       if (res.success) {
         router.push('/');
       } else {
         setError(res.error || 'Đăng ký thất bại!');
       }
-    }, 400);
+    } catch (_) {
+      setIsLoading(false);
+      setError('Có lỗi xảy ra khi kết nối máy chủ!');
+    }
   };
 
   return (

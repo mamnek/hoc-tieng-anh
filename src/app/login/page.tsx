@@ -15,7 +15,7 @@ export default function LoginPage() {
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError('');
 
@@ -31,30 +31,36 @@ export default function LoginPage() {
 
     setIsLoading(true);
 
-    setTimeout(() => {
-      const res = loginUser(email, password);
+    try {
+      const res = await loginUser(email, password);
       setIsLoading(false);
       if (res.success) {
         router.push('/');
       } else {
         setError(res.error || 'Đăng nhập thất bại!');
       }
-    }, 400);
+    } catch (_) {
+      setIsLoading(false);
+      setError('Có lỗi xảy ra khi kết nối máy chủ!');
+    }
   };
 
-  const handleGoogleLogin = () => {
+  const handleGoogleLogin = async () => {
     setIsLoading(true);
-    setTimeout(() => {
-      const res = loginUser('hocvien@gmail.com', '123456');
+    try {
+      const res = await loginUser('hocvien@gmail.com', '123456');
       if (!res.success) {
-        // Register quick google user
-        const reg = useAppStore.getState().registerUser('Học viên Google', 'hocvien@gmail.com', '123456');
+        const reg = await useAppStore.getState().registerUser('Học viên Google', 'hocvien@gmail.com', '123456');
         if (reg.success) router.push('/');
+        else setError(reg.error || 'Đăng nhập thất bại!');
       } else {
         router.push('/');
       }
+    } catch (_) {
+      setError('Có lỗi khi đăng nhập!');
+    } finally {
       setIsLoading(false);
-    }, 600);
+    }
   };
 
   const handleForgotPassword = () => {

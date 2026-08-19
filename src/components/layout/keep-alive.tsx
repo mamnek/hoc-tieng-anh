@@ -2,10 +2,11 @@
 
 import { useEffect } from 'react';
 import { DEFAULT_SOCKET_URL } from '@/lib/socket-battle';
+import { useAppStore } from '@/lib/store';
 
 export function KeepAlive() {
   useEffect(() => {
-    // Silent keep-alive ping function
+    // Silent keep-alive ping & cloud sync function
     const pingServers = async () => {
       try {
         // 1. Ping web-ielts internal endpoint
@@ -17,6 +18,9 @@ export function KeepAlive() {
           mode: 'no-cors',
           cache: 'no-store',
         });
+
+        // 3. Silent background cloud sync to MongoDB
+        await useAppStore.getState().syncCloudData();
       } catch (_) {
         // Silently ignore any network errors
       }
