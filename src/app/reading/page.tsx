@@ -118,20 +118,17 @@ export default function ReadingPage() {
     }
   }, [selectedPassageKey, inputMode]);
 
-  // Handle word click translation
-  const handleWordClick = async (e: React.MouseEvent, rawWord: string) => {
-    const cleanWord = rawWord.trim().replace(/^[^\w]+|[^\w]+$/g, '');
-    if (!cleanWord || cleanWord.length < 2) return;
+  // Translate word or multi-word phrase
+  const translateText = async (textToTranslate: string, x: number, y: number) => {
+    const cleanText = textToTranslate.trim().replace(/^[^\w\s]+|[^\w\s]+$/g, '');
+    if (!cleanText || cleanText.length < 2) return;
 
-    const rect = (e.target as HTMLElement).getBoundingClientRect();
-    const x = Math.min(window.innerWidth - 280, Math.max(16, rect.left));
-    const y = rect.bottom + window.scrollY + 8;
-
-    const ipa = getWordIpa(cleanWord.toLowerCase());
+    const isSingleWord = !cleanText.includes(' ');
+    const ipa = isSingleWord ? getWordIpa(cleanText.toLowerCase()) : '';
 
     setPopupData({
-      word: cleanWord,
-      vi: 'Đang tra từ điển...',
+      word: cleanText,
+      vi: 'Đang dịch nghĩa...',
       ipa: ipa ? `/${ipa}/` : '',
       loading: true,
       x,
@@ -141,13 +138,14 @@ export default function ReadingPage() {
 
     try {
       const res = await fetch(
-        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(cleanWord)}`
+        `https://translate.googleapis.com/translate_a/single?client=gtx&sl=en&tl=vi&dt=t&q=${encodeURIComponent(cleanText)}`
       );
       const data = await res.json();
-      if (data && data[0] && data[0][0] && data[0][0][0]) {
+      if (data && data[0]) {
+        const translated = data[0].map((item: any) => item[0]).join('');
         setPopupData((prev) => ({
           ...prev,
-          vi: data[0][0][0],
+          vi: translated || 'Không tìm thấy nghĩa.',
           loading: false,
         }));
       } else {
@@ -160,11 +158,55 @@ export default function ReadingPage() {
     } catch (_) {
       setPopupData((prev) => ({
         ...prev,
-        vi: 'Nghĩa từ vựng chưa tải được.',
+        vi: 'Lỗi kết nối mạng khi tra từ.',
         loading: false,
       }));
     }
   };
+
+  // Handle single word click
+  const handleWordClick = async (e: React.MouseEvent, rawWord: string) => {
+    // If user is currently selecting/highlighting text, ignore single click
+    const selection = window.getSelection();
+    if (selection && selection.toString().trim().length > 0) return;
+
+    const rect = (e.target as HTMLElement).getBoundingClientRect();
+    const x = Math.min(window.innerWidth - 300, Math.max(16, rect.left));
+    const y = rect.bottom + window.scrollY + 8;
+
+    translateText(rawWord, x, y);
+  };
+
+  // Multi-word phrase selection listener (Highlight / Drag selection)
+  useEffect(() => {
+    let timeoutId: any = null;
+    const handleSelectionChange = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        const selection = window.getSelection();
+        if (!selection || selection.isCollapsed) return;
+
+        const phrase = selection.toString().trim();
+        if (!phrase || phrase.length < 2) return;
+
+        if (textContainerRef.current && textContainerRef.current.contains(selection.anchorNode)) {
+          if (selection.rangeCount > 0) {
+            const range = selection.getRangeAt(0);
+            const rect = range.getBoundingClientRect();
+            const x = Math.min(window.innerWidth - 300, Math.max(16, rect.left));
+            const y = rect.bottom + window.scrollY + 8;
+            translateText(phrase, x, y);
+          }
+        }
+      }, 350);
+    };
+
+    document.addEventListener('selectionchange', handleSelectionChange);
+    return () => {
+      clearTimeout(timeoutId);
+      document.removeEventListener('selectionchange', handleSelectionChange);
+    };
+  }, []);
 
   // Text-to-Speech
   const handleSpeak = (text: string) => {
@@ -458,23 +500,23 @@ export default function ReadingPage() {
         {/* ──────────────── Interactive Reading Canvas ──────────────── */}
         <div
           ref={textContainerRef}
-          className="bg-white dark:bg-gray-850 p-6 sm:p-10 rounded-3xl border border-gray-100 dark:border-gray-750 shadow-sm relative leading-relaxed"
+          className="bg-white dark:bg-[#1A1A2E] p-6 sm:p-10 rounded-3xl border border-gray-200 dark:border-gray-800 shadow-sm relative leading-relaxed transition-colors"
           style={{
             fontSize: `${fontSize}px`,
             lineHeight: lineSpacing === 'loose' ? '2.4' : lineSpacing === 'relaxed' ? '2.0' : '1.7',
           }}
         >
           {/* Instructions bar */}
-          <div className="flex items-center justify-between pb-4 mb-6 border-b border-gray-100 dark:border-gray-700/60 text-xs text-gray-400">
+          <div className="flex items-center justify-between pb-4 mb-6 border-b border-gray-100 dark:border-gray-800 text-xs text-gray-400">
             <span className="flex items-center gap-1.5">
               <Sparkles className="w-3.5 h-3.5 text-primary" />
-              Chạm hoặc bấm vào từ bất kỳ để tra nghĩa & nghe phát âm
+              Chạm vào từ hoặc bôi đen cả cụm từ để tra nghĩa & nghe phát âm
             </span>
-            <span className="text-[11px] font-mono">{activeText.split(/\s+/).filter(Boolean).length} từ</span>
+            <span className="text-[11px] font-mono text-gray-500 dark:text-gray-400">{activeText.split(/\s+/).filter(Boolean).length} từ</span>
           </div>
 
           {/* Render Interactive Words */}
-          <div className="font-serif text-gray-800 dark:text-gray-100 whitespace-pre-wrap select-text">
+          <div className="font-serif text-gray-900 dark:text-gray-100 whitespace-pre-wrap select-text selection:bg-purple-500/30">
             {activeText.split(/(\s+)/).map((segment, idx) => {
               if (segment.trim() === '') {
                 return <span key={idx}>{segment}</span>;
@@ -484,7 +526,7 @@ export default function ReadingPage() {
                 <span
                   key={idx}
                   onClick={(e) => handleWordClick(e, segment)}
-                  className="hover:bg-purple-100 dark:hover:bg-purple-900/60 hover:text-primary rounded-md px-0.5 py-0.5 transition-colors cursor-pointer inline-block"
+                  className="hover:bg-purple-100 dark:hover:bg-purple-900/60 hover:text-purple-600 dark:hover:text-purple-300 rounded-md px-0.5 py-0.5 transition-colors cursor-pointer inline-block"
                 >
                   {segment}
                 </span>

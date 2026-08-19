@@ -1,5 +1,5 @@
 import { io, Socket } from 'socket.io-client';
-import { BattlePlayer, BattleQuestion, BattleRoundResult, BattleGameOver } from './types';
+import { BattlePlayer, BattleQuestion, BattleRoundResult, BattleGameOver, Word } from './types';
 import { presetWords, presetWordSets } from './preset-data';
 
 // Default Render Backend URL (Configurable via ENV or Settings)
@@ -95,94 +95,76 @@ class BattleSoundEffects {
       });
     } catch (_) {}
   }
-
-  playDefeat() {
-    try {
-      this.initCtx();
-      if (!this.ctx) return;
-      const now = this.ctx.currentTime;
-      const notes = [440, 392, 349.23, 293.66]; // A4, G4, F4, D4
-      notes.forEach((freq, idx) => {
-        const osc = this.ctx!.createOscillator();
-        const gain = this.ctx!.createGain();
-        osc.type = 'sawtooth';
-        osc.frequency.setValueAtTime(freq, now + idx * 0.15);
-        gain.gain.setValueAtTime(0.15, now + idx * 0.15);
-        gain.gain.exponentialRampToValueAtTime(0.01, now + idx * 0.15 + 0.4);
-        osc.connect(gain);
-        gain.connect(this.ctx!.destination);
-        osc.start(now + idx * 0.15);
-        osc.stop(now + idx * 0.15 + 0.4);
-      });
-    } catch (_) {}
-  }
 }
 
 export const battleSounds = new BattleSoundEffects();
 
-// ──────────────── Fuzzy Matching String Helper ────────────────
-export function removeAccents(text: string): string {
-  return text
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/đ/g, 'd')
-    .replace(/Đ/g, 'D');
+// Collocations Sample Database for Collocation Match Mode
+export const IELTS_COLLOCATIONS = [
+  { term: 'vital role', meaningVi: 'vai trò thiết yếu', sentence: 'Education plays a _____ in modern society.', options: ['vital role', 'heavy role', 'main role', 'high role'] },
+  { term: 'heavy traffic', meaningVi: 'giao thông đông đúc', sentence: 'I arrived late due to _____ during rush hour.', options: ['heavy traffic', 'crowded traffic', 'strong traffic', 'thick traffic'] },
+  { term: 'make a decision', meaningVi: 'đưa ra quyết định', sentence: 'He had to _____ quickly under high pressure.', options: ['make a decision', 'do a decision', 'take a deciding', 'build a decision'] },
+  { term: 'broaden horizons', meaningVi: 'mở rộng tầm nhìn', sentence: 'Travelling abroad helps students _____ significantly.', options: ['broaden horizons', 'widen horizons', 'open visions', 'expand skies'] },
+  { term: 'pressing issue', meaningVi: 'vấn đề cấp bách', sentence: 'Global warming is currently a _____ for humanity.', options: ['pressing issue', 'pushing issue', 'squeezing problem', 'heavy topic'] },
+  { term: 'bridge the gap', meaningVi: 'thu hẹp khoảng cách', sentence: 'Technology can help _____ between rich and poor.', options: ['bridge the gap', 'close the road', 'cut the distance', 'fix the hole'] },
+  { term: 'pose a threat', meaningVi: 'gây ra mối đe dọa', sentence: 'Pollution continues to _____ to marine ecosystems.', options: ['pose a threat', 'give a threat', 'bring a danger', 'make a hazard'] },
+  { term: 'take into account', meaningVi: 'xem xét, tính đến', sentence: 'We must _____ all environmental factors.', options: ['take into account', 'bring to account', 'hold into mind', 'keep to count'] },
+  { term: 'profound impact', meaningVi: 'tác động sâu sắc', sentence: 'Artificial intelligence has had a _____ on work.', options: ['profound impact', 'deep collision', 'high pressure', 'strong hit'] },
+  { term: 'pay attention to', meaningVi: 'chú ý đến', sentence: 'Students should _____ pronunciation when speaking.', options: ['pay attention to', 'give attention on', 'take care of', 'hold ear to'] },
+];
+
+export interface BattleRoomConfig {
+  username: string;
+  mode: 'single' | 'multi' | 'sync' | 'bot';
+  difficulty?: 'easy' | 'medium' | 'hard';
+  questionType?: 'en-vi' | 'vi-en' | 'mixed' | 'collocation';
+  vocabTopic?: string;
+  customWords?: Word[];
+  questionCount?: number;
+  avatar?: string;
 }
 
-export function checkVocabAnswer(userInput: string, correctAnswer: string): boolean {
-  const u = removeAccents(userInput.trim().toLowerCase());
-  const c = removeAccents(correctAnswer.trim().toLowerCase());
-  if (u === c) return true;
-
-  // Keyword match
-  if (u.length >= 3 && (c.includes(u) || u.includes(c))) return true;
-
-  // Simple character similarity
-  let matches = 0;
-  for (let i = 0; i < Math.min(u.length, c.length); i++) {
-    if (u[i] === c[i]) matches++;
-  }
-  const ratio = (matches * 2) / (u.length + c.length);
-  return ratio >= 0.8;
-}
-
-// ──────────────── Battle Socket Client & Local Engine ────────────────
-export type BattleEventListener = {
-  onRoomUpdate?: (roomData: { roomCode: string; players: Record<string, BattlePlayer>; isStarted: boolean }) => void;
+export interface BattleClientListeners {
+  onRoomUpdate?: (data: { roomCode: string; players: Record<string, BattlePlayer>; isStarted: boolean; config?: any }) => void;
   onNextWord?: (question: BattleQuestion) => void;
   onRoundResult?: (result: BattleRoundResult) => void;
-  onGameOver?: (gameOverData: BattleGameOver) => void;
+  onGameOver?: (data: BattleGameOver) => void;
   onReceiveEmoji?: (data: { senderId: string; senderName: string; emoji: string }) => void;
-  onError?: (errorMsg: string) => void;
-};
+  onError?: (error: string) => void;
+}
 
+// ──────────────── Unified Battle Client (Online Socket + Offline AI Engine) ────────────────
 export class BattleClient {
   private socket: Socket | null = null;
+  private listeners: BattleClientListeners = {};
   private serverUrl: string;
-  private listeners: BattleEventListener = {};
-  private isLocalMode: boolean = false;
-  private localTimer: any = null;
-  private currentRound: number = 0;
-  private localRoomCode: string = '';
+  private isLocalMode = true;
+
+  // Local AI / Offline Game Simulation State
+  private localRoomCode = '';
   private localPlayers: Record<string, BattlePlayer> = {};
   private localQuestions: BattleQuestion[] = [];
+  private currentRound = 0;
   private botDifficulty: 'easy' | 'medium' | 'hard' = 'medium';
+  private currentConfig: BattleRoomConfig | null = null;
+  private localTimer: any = null;
+  private mistakeWords: { term: string; meaningVi: string }[] = [];
 
   constructor(serverUrl: string = DEFAULT_SOCKET_URL) {
     this.serverUrl = serverUrl;
   }
 
-  setListeners(listeners: BattleEventListener) {
+  setListeners(listeners: BattleClientListeners) {
     this.listeners = listeners;
   }
 
-  // Connect to Render Socket Server with fallback to offline local AI Bot
+  // Connect to Remote Socket.IO Server if available
   connect(): Promise<boolean> {
     return new Promise((resolve) => {
       try {
         this.socket = io(this.serverUrl, {
           transports: ['websocket', 'polling'],
-          timeout: 6000,
+          timeout: 4000,
           reconnectionAttempts: 2,
         });
 
@@ -193,7 +175,6 @@ export class BattleClient {
         });
 
         this.socket.on('connect_error', () => {
-          console.warn('[Battle Arena] Server connection timed out. Falling back to local offline AI Bot engine.');
           this.isLocalMode = true;
           resolve(false);
         });
@@ -212,6 +193,7 @@ export class BattleClient {
         roomCode: data.room_code || data.roomCode,
         players: data.players || {},
         isStarted: !!data.game_started,
+        config: data.config,
       });
     });
 
@@ -265,39 +247,125 @@ export class BattleClient {
     });
   }
 
-  // Create or Start Battle (Supports Bot / PvP)
-  createRoom(username: string, mode: 'bot' | 'pvp', difficulty: 'easy' | 'medium' | 'hard' = 'medium', avatar?: string) {
-    if (this.socket && this.socket.connected && !this.isLocalMode && mode === 'pvp') {
+  // Create Room with Full Config
+  createRoom(config: BattleRoomConfig) {
+    this.currentConfig = config;
+    const { username, mode, difficulty = 'medium', avatar } = config;
+
+    if (this.socket && this.socket.connected && !this.isLocalMode && (mode === 'multi' || mode === 'sync')) {
       this.socket.emit('create_room', {
         username,
         mode,
         difficulty,
+        question_type: config.questionType || 'en-vi',
+        topic: config.vocabTopic || 'all',
+        question_count: config.questionCount || 10,
       });
       return;
     }
 
-    // Local / Bot Engine Execution
+    // Local / Bot Engine
     this.isLocalMode = true;
     this.botDifficulty = difficulty;
     this.localRoomCode = Math.random().toString(36).substring(2, 8).toUpperCase();
     
-    const botName = difficulty === 'hard' ? 'AI IELTS Master' : difficulty === 'medium' ? 'AI Bot Challenger' : 'AI Rookie Bot';
+    const botName = difficulty === 'hard' ? '🤖 Oxford Bot' : difficulty === 'medium' ? '👨‍🏫 Giáo viên IELTS' : '🧒 Học sinh';
 
-    this.localPlayers = {
-      user: {
-        id: 'user',
-        username,
-        avatar: avatar || '👤',
-        hp: 100,
-        score: 0,
-        combo: 0,
-        isReady: true,
-        isHost: true,
-        streak: 0,
-      },
-      bot: {
+    if (mode === 'single') {
+      this.localPlayers = {
+        user: {
+          id: 'user',
+          username,
+          avatar: avatar || '🧑',
+          hp: 100,
+          score: 0,
+          combo: 0,
+          isReady: true,
+          isHost: true,
+          streak: 0,
+        },
+      };
+      this.prepareLocalQuestions(config);
+      this.currentRound = 0;
+      this.listeners.onRoomUpdate?.({
+        roomCode: this.localRoomCode,
+        players: this.localPlayers,
+        isStarted: true,
+        config,
+      });
+      setTimeout(() => this.startNextLocalRound(), 1200);
+    } else if (mode === 'bot') {
+      this.localPlayers = {
+        user: {
+          id: 'user',
+          username,
+          avatar: avatar || '🧑',
+          hp: 100,
+          score: 0,
+          combo: 0,
+          isReady: true,
+          isHost: true,
+          streak: 0,
+        },
+        bot: {
+          id: 'bot',
+          username: botName,
+          avatar: difficulty === 'hard' ? '🤖' : difficulty === 'medium' ? '👨‍🏫' : '🧒',
+          hp: 100,
+          score: 0,
+          combo: 0,
+          isReady: true,
+          isBot: true,
+          streak: 0,
+        },
+      };
+      this.prepareLocalQuestions(config);
+      this.currentRound = 0;
+      this.listeners.onRoomUpdate?.({
+        roomCode: this.localRoomCode,
+        players: this.localPlayers,
+        isStarted: true,
+        config,
+      });
+      setTimeout(() => this.startNextLocalRound(), 1200);
+    } else {
+      // Multiplayer 1v1 PvP / Sync Mode: Enter Waiting Room State!
+      this.localPlayers = {
+        user: {
+          id: 'user',
+          username,
+          avatar: avatar || '🧑',
+          hp: 100,
+          score: 0,
+          combo: 0,
+          isReady: true,
+          isHost: true,
+          streak: 0,
+        },
+      };
+      this.prepareLocalQuestions(config);
+      this.currentRound = 0;
+      this.listeners.onRoomUpdate?.({
+        roomCode: this.localRoomCode,
+        players: this.localPlayers,
+        isStarted: false,
+        config,
+      });
+    }
+  }
+
+  // Host starts match in multiplayer
+  startMatch() {
+    if (this.socket && this.socket.connected && !this.isLocalMode) {
+      this.socket.emit('start_game', { room_code: this.localRoomCode });
+      return;
+    }
+
+    // If only host is in room and starts, add a friendly AI Opponent as player 2
+    if (!this.localPlayers.bot && !this.localPlayers.guest) {
+      this.localPlayers.bot = {
         id: 'bot',
-        username: botName,
+        username: '🤖 Đối Thủ AI',
         avatar: '🤖',
         hp: 100,
         score: 0,
@@ -305,23 +373,19 @@ export class BattleClient {
         isReady: true,
         isBot: true,
         streak: 0,
-      },
-    };
-
-    // Load rich vocabulary set for battle
-    this.prepareLocalQuestions();
-    this.currentRound = 0;
+      };
+    }
 
     this.listeners.onRoomUpdate?.({
       roomCode: this.localRoomCode,
       players: this.localPlayers,
       isStarted: true,
+      config: this.currentConfig,
     });
 
-    // Start round 1 in 1.5s
     setTimeout(() => {
       this.startNextLocalRound();
-    }, 1500);
+    }, 1000);
   }
 
   joinRoom(username: string, roomCode: string, avatar?: string) {
@@ -330,7 +394,28 @@ export class BattleClient {
       return;
     }
 
-    this.listeners.onError?.('Không thể kết nối đến phòng trực tuyến lúc này. Vui lòng thử chế độ Đấu với AI Bot.');
+    // If local room code matches current active room
+    if (roomCode.trim().toUpperCase() === this.localRoomCode) {
+      this.localPlayers['guest'] = {
+        id: 'guest',
+        username: username || 'Khách Mời',
+        avatar: avatar || '👤',
+        hp: 100,
+        score: 0,
+        combo: 0,
+        isReady: true,
+        streak: 0,
+      };
+      this.listeners.onRoomUpdate?.({
+        roomCode: this.localRoomCode,
+        players: this.localPlayers,
+        isStarted: true,
+      });
+      return;
+    }
+
+    this.listeners.onError?.('Không tìm thấy mã phòng hoặc máy chủ trực tuyến đang tải. Đang chuyển sang Đấu với AI Bot...');
+    this.createRoom({ username, mode: 'bot', difficulty: 'medium' });
   }
 
   submitAnswer(answer: string, roundId: number) {
@@ -343,7 +428,7 @@ export class BattleClient {
       return;
     }
 
-    // Local Bot Battle Logic
+    // Local Bot / Solo Battle Logic
     if (roundId !== this.currentRound) return;
     const q = this.localQuestions[this.currentRound - 1];
     if (!q) return;
@@ -356,7 +441,10 @@ export class BattleClient {
       battleSounds.playCorrect();
       this.localPlayers.user.score += 100 + this.localPlayers.user.combo * 20;
       this.localPlayers.user.combo += 1;
-      this.localPlayers.bot.hp = Math.max(0, this.localPlayers.bot.hp - (20 + this.localPlayers.user.combo * 5));
+      
+      if (this.localPlayers.bot) {
+        this.localPlayers.bot.hp = Math.max(0, this.localPlayers.bot.hp - (20 + this.localPlayers.user.combo * 5));
+      }
 
       this.listeners.onRoundResult?.({
         roundId,
@@ -370,6 +458,7 @@ export class BattleClient {
       battleSounds.playDamage();
       this.localPlayers.user.combo = 0;
       this.localPlayers.user.hp = Math.max(0, this.localPlayers.user.hp - 15);
+      this.mistakeWords.push({ term: q.wordEn, meaningVi: q.wordVi });
 
       this.listeners.onRoundResult?.({
         roundId,
@@ -390,47 +479,97 @@ export class BattleClient {
       return;
     }
 
-    // Broadcast locally
     this.listeners.onReceiveEmoji?.({
       senderId: 'user',
       senderName: this.localPlayers.user?.username || 'Bạn',
       emoji,
     });
 
-    // Bot reacts with a counter emoji occasionally
-    setTimeout(() => {
-      const botEmojis = ['😎', '🔥', '⚡', '🤖', '💪', '🏆'];
-      const randomBotEmoji = botEmojis[Math.floor(Math.random() * botEmojis.length)];
-      this.listeners.onReceiveEmoji?.({
-        senderId: 'bot',
-        senderName: this.localPlayers.bot?.username || 'Bot',
-        emoji: randomBotEmoji,
-      });
-    }, 1200);
+    if (this.localPlayers.bot) {
+      setTimeout(() => {
+        const botEmojis = ['😎', '🔥', '⚡', '🤖', '💪', '🏆'];
+        const randomBotEmoji = botEmojis[Math.floor(Math.random() * botEmojis.length)];
+        this.listeners.onReceiveEmoji?.({
+          senderId: 'bot',
+          senderName: this.localPlayers.bot?.username || 'Bot',
+          emoji: randomBotEmoji,
+        });
+      }, 1200);
+    }
   }
 
-  private prepareLocalQuestions() {
-    const allWords = presetWords || [];
-    const shuffled = [...allWords].sort(() => Math.random() - 0.5);
+  getMistakeWords() {
+    return this.mistakeWords;
+  }
 
-    this.localQuestions = shuffled.slice(0, 10).map((w, idx) => {
+  private prepareLocalQuestions(config?: BattleRoomConfig) {
+    const count = Math.min(30, Math.max(5, config?.questionCount || 10));
+    const qType = config?.questionType || 'en-vi';
+
+    // If Collocation Mode
+    if (qType === 'collocation') {
+      const shuffledCollocations = [...IELTS_COLLOCATIONS].sort(() => Math.random() - 0.5);
+      this.localQuestions = shuffledCollocations.slice(0, count).map((col, idx) => ({
+        roundId: idx + 1,
+        wordEn: col.term,
+        wordVi: col.meaningVi,
+        ipa: '',
+        hint: col.sentence,
+        hiddenEn: col.sentence,
+        timeLimit: 12,
+        options: col.options,
+      }));
+      return;
+    }
+
+    // Vocabulary based
+    let pool: Word[] = [];
+    if (config?.customWords && config.customWords.length > 0) {
+      pool = config.customWords;
+    } else {
+      const topic = config?.vocabTopic || 'all';
+      if (topic === 'all' || !topic) {
+        pool = presetWords;
+      } else {
+        const matchedSet = presetWordSets.find((s) => s.id.toLowerCase().includes(topic.toLowerCase()));
+        if (matchedSet) {
+          pool = presetWords.filter((w) => w.wordSetId === matchedSet.id);
+        }
+        if (pool.length === 0) pool = presetWords;
+      }
+    }
+
+    const shuffled = [...pool].sort(() => Math.random() - 0.5);
+    this.localQuestions = shuffled.slice(0, count).map((w, idx) => {
       const term = w.term || '';
       const hidden = term
         .split('')
         .map((char: string, cIdx: number) => (cIdx === 0 || cIdx === term.length - 1 ? char : '_'))
         .join(' ');
 
+      // Options generation
+      const isViEn = qType === 'vi-en' || (qType === 'mixed' && idx % 2 === 1);
+      let options: string[] = [];
+
+      if (isViEn) {
+        // Options are English terms
+        const wrong = shuffled.filter((item) => item.term !== term).slice(0, 3).map((item) => item.term);
+        options = [term, ...wrong].sort(() => Math.random() - 0.5);
+      } else {
+        // Options are Vietnamese meanings
+        const wrong = shuffled.filter((item) => item.meaningVi !== w.meaningVi).slice(0, 3).map((item) => item.meaningVi);
+        options = [w.meaningVi, ...wrong].sort(() => Math.random() - 0.5);
+      }
+
       return {
         roundId: idx + 1,
-        wordEn: term,
-        wordVi: w.meaningVi,
-        ipa: w.ipa,
-        hint: w.exampleEn || `Định nghĩa: ${w.meaningVi}`,
-        hiddenEn: hidden,
-        timeLimit: 10,
-        options: [term, ...shuffled.filter((item) => item.term !== term).slice(0, 3).map((item) => item.term)].sort(
-          () => Math.random() - 0.5
-        ),
+        wordEn: isViEn ? w.meaningVi : term, // Prompt
+        wordVi: isViEn ? term : w.meaningVi, // Target answer
+        ipa: w.ipa || '',
+        hint: w.exampleEn || `Nghĩa: ${w.meaningVi}`,
+        hiddenEn: isViEn ? '' : hidden,
+        timeLimit: 12,
+        options,
       };
     });
   }
@@ -446,48 +585,47 @@ export class BattleClient {
 
     this.listeners.onNextWord?.(q);
 
-    // Bot Response Simulator
-    const botDelay =
-      this.botDifficulty === 'hard'
-        ? Math.random() * 3000 + 2500 // 2.5s - 5.5s
-        : this.botDifficulty === 'medium'
-        ? Math.random() * 4000 + 4000 // 4s - 8s
-        : Math.random() * 4000 + 7000; // 7s - 11s
+    // Bot Response Simulator (if playing vs Bot)
+    if (this.localPlayers.bot) {
+      const botDelay =
+        this.botDifficulty === 'hard'
+          ? 3500 + Math.random() * 2500 // 3.5s - 6s
+          : this.botDifficulty === 'medium'
+          ? 5000 + Math.random() * 3500 // 5s - 8.5s
+          : 7500 + Math.random() * 4000; // 7.5s - 11.5s
 
-    const botWillAnswerCorrect =
-      this.botDifficulty === 'hard' ? Math.random() < 0.85 : this.botDifficulty === 'medium' ? Math.random() < 0.65 : Math.random() < 0.45;
+      const botAccuracy = this.botDifficulty === 'hard' ? 0.95 : this.botDifficulty === 'medium' ? 0.75 : 0.5;
 
-    this.localTimer = setTimeout(() => {
-      if (botWillAnswerCorrect) {
-        battleSounds.playDamage();
-        this.localPlayers.bot.score += 100;
-        this.localPlayers.bot.combo += 1;
-        this.localPlayers.user.hp = Math.max(0, this.localPlayers.user.hp - 20);
-        this.listeners.onRoundResult?.({
-          roundId: this.currentRound,
-          winnerId: 'bot',
-          winnerName: this.localPlayers.bot.username,
-          correctAnswer: `${q.wordEn} (${q.wordVi})`,
-          players: { ...this.localPlayers },
-          damageDealt: 20,
-        });
-      } else {
-        // Time out round
-        this.listeners.onRoundResult?.({
-          roundId: this.currentRound,
-          winnerId: undefined,
-          winnerName: undefined,
-          correctAnswer: `${q.wordEn} (${q.wordVi})`,
-          players: { ...this.localPlayers },
-        });
-      }
-      this.checkGameOverOrNext();
-    }, botDelay);
+      this.localTimer = setTimeout(() => {
+        if (Math.random() < botAccuracy) {
+          battleSounds.playDamage();
+          this.localPlayers.bot.score += 100 + this.localPlayers.bot.combo * 20;
+          this.localPlayers.bot.combo += 1;
+          this.localPlayers.user.hp = Math.max(0, this.localPlayers.user.hp - (20 + this.localPlayers.bot.combo * 5));
+
+          this.listeners.onRoundResult?.({
+            roundId: this.currentRound,
+            winnerId: 'bot',
+            winnerName: this.localPlayers.bot.username,
+            correctAnswer: `${q.wordEn} (${q.wordVi})`,
+            players: { ...this.localPlayers },
+            damageDealt: 20 + this.localPlayers.bot.combo * 5,
+          });
+        } else {
+          this.localPlayers.bot.combo = 0;
+        }
+
+        this.checkGameOverOrNext();
+      }, botDelay);
+    }
   }
 
   private checkGameOverOrNext() {
-    if (this.localPlayers.user.hp <= 0 || this.localPlayers.bot.hp <= 0 || this.currentRound >= this.localQuestions.length) {
-      setTimeout(() => this.finishLocalGame(), 2000);
+    const userDead = this.localPlayers.user.hp <= 0;
+    const botDead = this.localPlayers.bot && this.localPlayers.bot.hp <= 0;
+
+    if (userDead || botDead || this.currentRound >= this.localQuestions.length) {
+      setTimeout(() => this.finishLocalGame(), 1500);
     } else {
       setTimeout(() => this.startNextLocalRound(), 2500);
     }
@@ -495,25 +633,41 @@ export class BattleClient {
 
   private finishLocalGame() {
     if (this.localTimer) clearTimeout(this.localTimer);
-    const userHp = this.localPlayers.user.hp;
-    const botHp = this.localPlayers.bot.hp;
-    const userWon = userHp > botHp || (userHp === botHp && this.localPlayers.user.score >= this.localPlayers.bot.score);
 
-    if (userWon) {
+    const user = this.localPlayers.user;
+    const bot = this.localPlayers.bot;
+    let winnerId = 'user';
+    let winnerName = user.username;
+    let isDraw = false;
+
+    if (bot) {
+      if (user.hp <= 0 && bot.hp > 0) {
+        winnerId = 'bot';
+        winnerName = bot.username;
+      } else if (bot.hp <= 0 && user.hp > 0) {
+        winnerId = 'user';
+        winnerName = user.username;
+      } else if (user.score < bot.score) {
+        winnerId = 'bot';
+        winnerName = bot.username;
+      } else if (user.score === bot.score) {
+        isDraw = true;
+      }
+    }
+
+    if (winnerId === 'user') {
       battleSounds.playVictory();
-    } else {
-      battleSounds.playDefeat();
     }
 
     this.listeners.onGameOver?.({
-      winnerId: userWon ? 'user' : 'bot',
-      winnerName: userWon ? this.localPlayers.user.username : this.localPlayers.bot.username,
-      isDraw: userHp === botHp && this.localPlayers.user.score === this.localPlayers.bot.score,
+      winnerId: isDraw ? 'draw' : winnerId,
+      winnerName: isDraw ? 'Hòa Trận' : winnerName,
+      isDraw,
       finalPlayers: { ...this.localPlayers },
-      coinsGained: userWon ? 50 : 15,
-      expGained: userWon ? 100 : 35,
+      coinsGained: winnerId === 'user' ? 40 : 15,
+      expGained: winnerId === 'user' ? 80 : 30,
       roundsPlayed: this.currentRound,
-      totalWordsReviewed: this.currentRound,
+      totalWordsReviewed: this.localQuestions.length,
     });
   }
 
@@ -524,4 +678,17 @@ export class BattleClient {
       this.socket = null;
     }
   }
+}
+
+// Helper clean string compare
+function checkVocabAnswer(input: string, target: string): boolean {
+  if (!input || !target) return false;
+  const cleanInput = input.trim().toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '');
+  const cleanTarget = target.trim().toLowerCase().replace(/[^a-zA-Z0-9\s]/g, '');
+  
+  if (cleanInput === cleanTarget) return true;
+  
+  // Partial meaning match (e.g. "sự quan trọng" in "quan trọng")
+  const targetSubstrings = cleanTarget.split(/[,;/]/).map(s => s.trim());
+  return targetSubstrings.some(sub => sub === cleanInput || (cleanInput.length >= 3 && sub.includes(cleanInput)));
 }

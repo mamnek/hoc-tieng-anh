@@ -467,6 +467,9 @@ export const useAppStore = create<AppState>()(
               )
             : [...state.progress, updatedProgress],
         }));
+
+        get().recordActivity();
+        get().checkAndUpdateStreak();
       },
       toggleMastered: (wordId) => {
         const state = get();
@@ -645,36 +648,34 @@ export const useAppStore = create<AppState>()(
         if (!activeUser) return;
 
         const today = new Date();
-        today.setHours(0, 0, 0, 0);
-        const lastActive = new Date(activeUser.lastActiveDate);
-        lastActive.setHours(0, 0, 0, 0);
+        const todayStr = today.toISOString().split('T')[0];
+        const lastActiveStr = activeUser.lastActiveDate ? activeUser.lastActiveDate.split('T')[0] : '';
 
-        const diffDays = Math.floor(
-          (today.getTime() - lastActive.getTime()) / 86400000
-        );
-
-        if (diffDays === 0) return;
-
-        let newStreak = activeUser.streakCount;
-        if (diffDays === 1) {
-          newStreak = activeUser.streakCount + 1;
-        } else if (diffDays > 1) {
-          newStreak = 1;
+        // If already updated today
+        if (lastActiveStr === todayStr) {
+          if ((activeUser.streakCount || 0) < 1) {
+            get().updateUser({ streakCount: 1, lastActiveDate: today.toISOString() });
+          }
+          return;
         }
 
-        const updatedUser = {
-          ...activeUser,
+        const todayDate = new Date(todayStr);
+        const lastDate = lastActiveStr ? new Date(lastActiveStr) : new Date(todayStr);
+        const diffDays = Math.round((todayDate.getTime() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+
+        let newStreak = activeUser.streakCount || 0;
+        if (diffDays === 1) {
+          newStreak += 1;
+        } else if (diffDays > 1) {
+          newStreak = 1;
+        } else {
+          newStreak = Math.max(1, newStreak);
+        }
+
+        get().updateUser({
           streakCount: newStreak,
           lastActiveDate: today.toISOString(),
-        };
-
-        set((state) => ({
-          currentUser: state.currentUser ? updatedUser : null,
-          user: updatedUser,
-          users: state.currentUser
-            ? state.users.map((u) => (u.id === state.currentUser?.id ? updatedUser : u))
-            : state.users,
-        }));
+        });
       },
 
       // Videos

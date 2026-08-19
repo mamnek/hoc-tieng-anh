@@ -20,6 +20,7 @@ import {
   Mic,
   Swords,
   BookOpenCheck,
+  Clock,
   LogOut
 } from "lucide-react";
 
@@ -35,6 +36,7 @@ const getIcon = (iconName: string) => {
     case 'Home': return Home;
     case 'BookOpenCheck': return BookOpenCheck;
     case 'Swords': return Swords;
+    case 'Clock': return Clock;
     case 'Mic': return Mic;
     case 'Video': return VideoIcon;
     case 'FolderOpen': return FolderOpen;

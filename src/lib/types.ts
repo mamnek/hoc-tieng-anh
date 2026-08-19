@@ -51,6 +51,7 @@ export interface User {
   streakCount: number;
   lastActiveDate: string; // ISO date
   coins: number;
+  arenaElo?: number;
   createdAt: string;
 }
 
