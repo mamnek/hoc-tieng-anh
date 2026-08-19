@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AppShell } from "@/components/layout/app-shell";
+import { KeepAlive } from "@/components/layout/keep-alive";
 
 const inter = Inter({ subsets: ["latin", "vietnamese"] });
 
@@ -18,6 +19,7 @@ export default function RootLayout({
   return (
     <html lang="vi" suppressHydrationWarning>
       <body className={`${inter.className} antialiased`} suppressHydrationWarning>
+        <KeepAlive />
         <AppShell>{children}</AppShell>
       </body>
     </html>
