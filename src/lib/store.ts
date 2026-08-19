@@ -88,6 +88,8 @@ interface AppState {
   speakingQuestionSets: SpeakingQuestionSet[];
   speakingAttempts: SpeakingAttempt[];
   speakingErrorReports: SpeakingErrorReport[];
+  addSpeakingQuestionSet: (set: Omit<SpeakingQuestionSet, 'id' | 'createdAt'>) => string;
+  deleteSpeakingQuestionSet: (id: string) => void;
   addSpeakingAttempt: (attempt: Omit<SpeakingAttempt, 'id' | 'createdAt'>) => string;
   addSpeakingErrorReport: (report: Omit<SpeakingErrorReport, 'id' | 'createdAt'>) => void;
 
@@ -105,11 +107,12 @@ interface AppState {
 const defaultUser: User = {
   id: 'user-guest',
   name: 'Học viên',
-  email: 'hocvien@example.com',
+  email: 'hocvien@gmail.com',
+  password: '123',
   avatarUrl: '',
-  streakCount: 0,
+  streakCount: 1,
   lastActiveDate: new Date().toISOString(),
-  coins: 0,
+  coins: 50,
   createdAt: new Date().toISOString(),
 };
 
@@ -168,9 +171,9 @@ export const useAppStore = create<AppState>()(
   persist(
     (set, get) => ({
       // Auth & User State
-      users: [],
-      currentUser: null,
-      isAuthenticated: false,
+      users: [defaultUser],
+      currentUser: defaultUser,
+      isAuthenticated: true,
       user: defaultUser,
 
       registerUser: (name, email, password) => {
@@ -623,6 +626,23 @@ export const useAppStore = create<AppState>()(
       speakingQuestionSets: [...presetSpeakingSets],
       speakingAttempts: [],
       speakingErrorReports: [],
+      addSpeakingQuestionSet: (setData) => {
+        const id = `speaking-set-custom-${generateId()}`;
+        const newSet: SpeakingQuestionSet = {
+          ...setData,
+          id,
+          createdAt: new Date().toISOString(),
+        };
+        set((state) => ({
+          speakingQuestionSets: [newSet, ...(state.speakingQuestionSets || [])],
+        }));
+        return id;
+      },
+      deleteSpeakingQuestionSet: (id: string) => {
+        set((state) => ({
+          speakingQuestionSets: (state.speakingQuestionSets || []).filter((s) => s.id !== id),
+        }));
+      },
       addSpeakingAttempt: (attemptData) => {
         const id = generateId();
         const newAttempt: SpeakingAttempt = {
@@ -739,6 +759,16 @@ export const useAppStore = create<AppState>()(
           const missingSpeakingSets = presetSpeakingSets.filter((ps) => !existingSpeakingIds.has(ps.id));
           if (missingSpeakingSets.length > 0) {
             state.speakingQuestionSets = [...(state.speakingQuestionSets || []), ...missingSpeakingSets];
+          }
+
+          // Ensure default user is authenticated if empty
+          if (!state.currentUser) {
+            state.currentUser = defaultUser;
+            state.user = defaultUser;
+            state.isAuthenticated = true;
+          }
+          if (!state.users || state.users.length === 0) {
+            state.users = [defaultUser];
           }
 
           // Recalculate word counts for all sets

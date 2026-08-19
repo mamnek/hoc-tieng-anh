@@ -182,7 +182,7 @@ export interface SpeakingQuestionSet {
   title: string;
   topic: string;
   level: 'Cơ bản' | 'Trung cấp' | 'Nâng cao';
-  badge?: 'Mới' | 'Hot' | 'Forecast Q3' | 'Forecast Q4';
+  badge?: string;
   description: string;
   part1Questions: SpeakingQuestion[];
   part2CueCard: SpeakingCueCard;
@@ -193,9 +193,11 @@ export interface SpeakingQuestionSet {
 
 export interface WordPronunciationItem {
   word: string;
+  targetWord?: string;
   ipa: string;
   severity: 'none' | 'minor' | 'light' | 'heavy';
   feedback?: string;
+  status?: 'correct' | 'mispronounced' | 'omitted' | 'inserted';
 }
 
 export interface CriteriaScoreDetail {

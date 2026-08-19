@@ -34,6 +34,7 @@ import {
   Tooltip,
   ResponsiveContainer
 } from 'recharts';
+import AiSpeakingModal from '@/components/speaking/ai-speaking-modal';
 
 export default function SpeakingHubPage() {
   const router = useRouter();
@@ -43,6 +44,8 @@ export default function SpeakingHubPage() {
   const [selectedLevel, setSelectedLevel] = useState<string>('all');
   const [selectedBadge, setSelectedBadge] = useState<string>('all');
   const [activeTab, setActiveTab] = useState<'sets' | 'history'>('sets');
+  const [visibleCount, setVisibleCount] = useState<number>(18);
+  const [isAiModalOpen, setIsAiModalOpen] = useState<boolean>(false);
 
   // Selected set for "Luyện theo câu" question picker modal
   const [questionPickerSet, setQuestionPickerSet] = useState<SpeakingQuestionSet | null>(null);
@@ -78,64 +81,64 @@ export default function SpeakingHubPage() {
     }));
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8 animate-fade-in">
+    <div className="max-w-7xl mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-8 space-y-6 sm:space-y-8 animate-fade-in">
       {/* Header Banner */}
-      <div className="bg-gradient-to-r from-primary via-indigo-600 to-purple-700 rounded-3xl p-6 sm:p-10 text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-r from-primary via-indigo-600 to-purple-700 rounded-2xl sm:rounded-3xl p-5 sm:p-10 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-96 h-96 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="space-y-3 max-w-2xl">
-            <div className="inline-flex items-center gap-2 px-3 py-1 bg-white/20 backdrop-blur-md rounded-full text-xs font-bold uppercase tracking-wider">
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-5 sm:gap-6">
+          <div className="space-y-2 sm:space-y-3 max-w-2xl">
+            <div className="inline-flex items-center gap-1.5 sm:gap-2 px-2.5 py-1 bg-white/20 backdrop-blur-md rounded-full text-[11px] sm:text-xs font-bold uppercase tracking-wider">
               <Sparkles className="w-3.5 h-3.5 text-amber-300" />
-              IELTS Speaking Virtual Examiner • Chuẩn 4 Tiêu Chí
+              IELTS Virtual Examiner • Chuẩn 4 Tiêu Chí
             </div>
 
-            <h1 className="text-2xl sm:text-4xl font-black tracking-tight leading-tight">
+            <h1 className="text-xl sm:text-4xl font-black tracking-tight leading-tight">
               Luyện Nói IELTS Speaking AI
             </h1>
 
-            <p className="text-white/80 text-sm sm:text-base leading-relaxed">
-              Mô phỏng 100% phòng thi thật với giám khảo bản xứ. Chấm điểm chi tiết 4 tiêu chí (Fluency, Lexical, Grammar, Pronunciation), phân tích phát âm từng từ với phiên âm IPA.
+            <p className="text-white/85 text-xs sm:text-base leading-relaxed">
+              Mô phỏng 100% phòng thi thật với giám khảo bản xứ. Chấm điểm 4 tiêu chí, phân tích phát âm từng từ với phiên âm IPA.
             </p>
           </div>
 
           {/* Quick Stats Grid */}
-          <div className="grid grid-cols-3 gap-3 w-full md:w-auto shrink-0">
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 text-center">
-              <span className="text-2xl sm:text-3xl font-black text-amber-300 block">{averageBand}</span>
-              <span className="text-[11px] text-white/80 font-medium">Band Trung Bình</span>
+          <div className="grid grid-cols-3 gap-2 sm:gap-3 w-full md:w-auto shrink-0">
+            <div className="bg-white/10 backdrop-blur-md p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/15 text-center">
+              <span className="text-lg sm:text-3xl font-black text-amber-300 block">{averageBand}</span>
+              <span className="text-[10px] sm:text-[11px] text-white/80 font-medium">Band TB</span>
             </div>
 
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 text-center">
-              <span className="text-2xl sm:text-3xl font-black text-emerald-300 block">{highestBand}</span>
-              <span className="text-[11px] text-white/80 font-medium">Band Cao Nhất</span>
+            <div className="bg-white/10 backdrop-blur-md p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/15 text-center">
+              <span className="text-lg sm:text-3xl font-black text-emerald-300 block">{highestBand}</span>
+              <span className="text-[10px] sm:text-[11px] text-white/80 font-medium">Cao nhất</span>
             </div>
 
-            <div className="bg-white/10 backdrop-blur-md p-4 rounded-2xl border border-white/15 text-center">
-              <span className="text-2xl sm:text-3xl font-black text-white block">{totalAttempts}</span>
-              <span className="text-[11px] text-white/80 font-medium">Lượt Thi Đã Làm</span>
+            <div className="bg-white/10 backdrop-blur-md p-2.5 sm:p-4 rounded-xl sm:rounded-2xl border border-white/15 text-center">
+              <span className="text-lg sm:text-3xl font-black text-white block">{totalAttempts}</span>
+              <span className="text-[10px] sm:text-[11px] text-white/80 font-medium">Lượt thi</span>
             </div>
           </div>
         </div>
       </div>
 
       {/* Navigation Tabs (Bộ đề vs Lịch sử thi) */}
-      <div className="flex items-center gap-3 border-b border-gray-200 dark:border-gray-700 pb-2">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 pb-2 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('sets')}
-          className={`px-5 py-2.5 font-bold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 sm:px-5 sm:py-2.5 font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'sets'
               ? 'bg-primary text-white shadow-md'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
           }`}
         >
           <Mic className="w-4 h-4" />
-          Ngân Hàng Bộ Đề IELTS ({filteredSets.length})
+          Ngân Hàng Bộ Đề ({filteredSets.length})
         </button>
 
         <button
           onClick={() => setActiveTab('history')}
-          className={`px-5 py-2.5 font-bold text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 py-2 sm:px-5 sm:py-2.5 font-bold text-xs sm:text-sm rounded-xl transition-all flex items-center gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'history'
               ? 'bg-primary text-white shadow-md'
               : 'text-gray-600 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800'
@@ -148,33 +151,36 @@ export default function SpeakingHubPage() {
 
       {/* TAB 1: BỘ ĐỀ THI */}
       {activeTab === 'sets' && (
-        <div className="space-y-6">
+        <div className="space-y-5 sm:space-y-6">
           {/* Filters & Search Toolbar */}
-          <div className="bg-white dark:bg-gray-800 rounded-2xl p-4 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col md:flex-row gap-4 justify-between items-center">
+          <div className="bg-white dark:bg-gray-800 rounded-2xl p-3.5 sm:p-4 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col md:flex-row gap-3 sm:gap-4 justify-between items-stretch md:items-center">
             {/* Search */}
-            <div className="relative w-full md:w-80">
+            <div className="relative w-full md:w-72">
               <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Tìm kiếm chủ đề, bộ đề..."
+                placeholder="Tìm kiếm trong 100+ bộ đề..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-primary text-sm text-gray-900 dark:text-white"
+                className="w-full pl-10 pr-4 py-2.5 bg-gray-50 dark:bg-gray-700 border border-gray-200 dark:border-gray-600 rounded-xl outline-none focus:ring-2 focus:ring-primary text-xs sm:text-sm text-gray-900 dark:text-white"
               />
             </div>
 
-            {/* Level & Badge Filters */}
-            <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+            {/* Level & Badge Filters + AI Button */}
+            <div className="flex items-center gap-2 overflow-x-auto no-scrollbar w-full md:w-auto pb-1 sm:pb-0">
               <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl text-xs font-semibold">
                 {[
-                  { id: 'all', label: 'Tất cả cấp độ' },
+                  { id: 'all', label: 'Tất cả' },
                   { id: 'Cơ bản', label: 'Cơ bản' },
                   { id: 'Trung cấp', label: 'Trung cấp' },
                   { id: 'Nâng cao', label: 'Nâng cao' },
                 ].map((lvl) => (
                   <button
                     key={lvl.id}
-                    onClick={() => setSelectedLevel(lvl.id)}
+                    onClick={() => {
+                      setSelectedLevel(lvl.id);
+                      setSelectedBadge('all');
+                    }}
                     className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
                       selectedLevel === lvl.id
                         ? 'bg-white dark:bg-gray-800 text-primary font-bold shadow-sm'
@@ -189,13 +195,17 @@ export default function SpeakingHubPage() {
               <div className="flex bg-gray-100 dark:bg-gray-700 p-1 rounded-xl text-xs font-semibold">
                 {[
                   { id: 'all', label: 'Tất cả đề' },
-                  { id: 'Forecast', label: 'Dự đoán (Forecast)' },
+                  { id: 'Forecast', label: 'Forecast 2026' },
                   { id: 'Hot', label: 'Hot 🔥' },
+                  { id: 'VIP', label: 'VIP 8.5+' },
                 ].map((bg) => (
                   <button
                     key={bg.id}
-                    onClick={() => setSelectedBadge(bg.id)}
-                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                    onClick={() => {
+                      setSelectedBadge(bg.id);
+                      setSelectedLevel('all');
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg transition-all cursor-pointer ${
                       selectedBadge === bg.id
                         ? 'bg-white dark:bg-gray-800 text-primary font-bold shadow-sm'
                         : 'text-gray-500 dark:text-gray-400 hover:text-gray-900'
@@ -205,91 +215,147 @@ export default function SpeakingHubPage() {
                   </button>
                 ))}
               </div>
+
+              {/* AI GENERATE BUTTON */}
+              <button
+                type="button"
+                onClick={() => setIsAiModalOpen(true)}
+                className="px-4 py-2 bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 text-white font-bold text-xs rounded-xl shadow-md shadow-amber-500/20 flex items-center gap-1.5 cursor-pointer transition-all hover:scale-105"
+              >
+                <Sparkles className="w-4 h-4 animate-spin-slow" />
+                Tạo đề bằng AI
+              </button>
             </div>
           </div>
 
-          {/* Question Sets Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {filteredSets.map((set) => {
-              const totalQuestions = (set.part1Questions?.length || 0) + 1 + (set.part3Questions?.length || 0);
+          {/* Empty State when no sets found */}
+          {filteredSets.length === 0 ? (
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-12 text-center border border-gray-100 dark:border-gray-700 shadow-sm space-y-4 animate-fade-in">
+              <div className="w-16 h-16 rounded-2xl bg-amber-100 dark:bg-amber-950/40 text-amber-600 dark:text-amber-400 flex items-center justify-center mx-auto text-2xl">
+                🔍
+              </div>
+              <h3 className="text-lg font-bold text-gray-900 dark:text-white">
+                Không tìm thấy bộ đề phù hợp với bộ lọc hiện tại
+              </h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400 max-w-md mx-auto leading-relaxed">
+                Bạn đang tìm kiếm với bộ lọc kết hợp. Hãy bấm nút bên dưới để xem lại toàn bộ 100 bộ đề IELTS Speaking.
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedLevel('all');
+                  setSelectedBadge('all');
+                  setSearchQuery('');
+                }}
+                className="px-6 py-2.5 bg-primary text-white font-bold text-xs rounded-xl shadow-md hover:bg-primary-dark transition-all cursor-pointer inline-flex items-center gap-2"
+              >
+                <RotateCcw className="w-4 h-4" />
+                Đặt lại bộ lọc (Xem tất cả 100 đề)
+              </button>
+            </div>
+          ) : (
+            <>
+              {/* Question Sets Grid (Paginated) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                {filteredSets.slice(0, visibleCount).map((set) => {
+                  const totalQuestions = (set.part1Questions?.length || 0) + 1 + (set.part3Questions?.length || 0);
 
-              return (
-                <div
-                  key={set.id}
-                  className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group justify-between"
-                >
-                  <div className="space-y-4">
-                    {/* Badges */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full uppercase tracking-wider">
-                        {set.topic}
-                      </span>
-
-                      <div className="flex items-center gap-1.5">
-                        {set.badge && (
-                          <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${
-                            set.badge.includes('Hot')
-                              ? 'bg-orange-100 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400'
-                              : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400'
-                          }`}>
-                            {set.badge}
+                  return (
+                    <div
+                      key={set.id}
+                      className="bg-white dark:bg-gray-800 rounded-3xl border border-gray-100 dark:border-gray-700 p-6 shadow-sm hover:shadow-xl transition-all duration-300 flex flex-col group justify-between"
+                    >
+                      <div className="space-y-4">
+                        {/* Badges */}
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold bg-primary/10 text-primary px-3 py-1 rounded-full uppercase tracking-wider">
+                            {set.topic}
                           </span>
-                        )}
-                        <span className="text-[11px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2.5 py-0.5 rounded-full">
-                          {set.level}
-                        </span>
+
+                          <div className="flex items-center gap-1.5">
+                            {set.badge && (
+                              <span className={`text-[11px] font-black px-2.5 py-0.5 rounded-full ${
+                                set.badge.includes('Hot')
+                                  ? 'bg-orange-100 text-orange-600 dark:bg-orange-950/50 dark:text-orange-400'
+                                  : 'bg-indigo-100 text-indigo-600 dark:bg-indigo-950/50 dark:text-indigo-400'
+                              }`}>
+                                {set.badge}
+                              </span>
+                            )}
+                            <span className="text-[11px] font-bold bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300 px-2.5 py-0.5 rounded-full">
+                              {set.level}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Title & Description */}
+                        <div>
+                          <h3 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-primary transition-colors line-clamp-2">
+                            {set.title}
+                          </h3>
+                          <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-2 leading-relaxed">
+                            {set.description}
+                          </p>
+                        </div>
+
+                        {/* Parts Breakdown Box */}
+                        <div className="p-3.5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 text-xs text-gray-600 dark:text-gray-300 space-y-1.5">
+                          <div className="flex items-center justify-between">
+                            <span>• Part 1: Phỏng vấn ngắn</span>
+                            <strong className="text-gray-900 dark:text-white">{set.part1Questions.length} câu</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>• Part 2: Cue Card (1m prep + 2m speak)</span>
+                            <strong className="text-gray-900 dark:text-white">1 đề</strong>
+                          </div>
+                          <div className="flex items-center justify-between">
+                            <span>• Part 3: Thảo luận chuyên sâu</span>
+                            <strong className="text-gray-900 dark:text-white">{set.part3Questions.length} câu</strong>
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Card Action Buttons */}
+                      <div className="pt-6 mt-4 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-2">
+                        <Link
+                          href={`/speaking/practice/${set.id}?mode=full_mock`}
+                          className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 text-xs sm:text-sm shadow-md hover:scale-[1.02] transition-all cursor-pointer"
+                        >
+                          <Play className="w-4 h-4 fill-current" />
+                          Thi thử (3 Parts)
+                        </Link>
+
+                        <button
+                          onClick={() => setQuestionPickerSet(set)}
+                          className="bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold px-3.5 py-3 rounded-2xl text-xs sm:text-sm transition-all cursor-pointer shadow-sm"
+                          title="Luyện từng câu đơn"
+                        >
+                          Luyện theo câu
+                        </button>
                       </div>
                     </div>
+                  );
+                })}
+              </div>
 
-                    {/* Title & Description */}
-                    <div>
-                      <h3 className="font-bold text-lg text-gray-900 dark:text-white group-hover:text-primary transition-colors line-clamp-2">
-                        {set.title}
-                      </h3>
-                      <p className="text-xs text-gray-500 dark:text-gray-400 line-clamp-2 mt-2 leading-relaxed">
-                        {set.description}
-                      </p>
-                    </div>
-
-                    {/* Parts Breakdown Box */}
-                    <div className="p-3.5 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 text-xs text-gray-600 dark:text-gray-300 space-y-1.5">
-                      <div className="flex items-center justify-between">
-                        <span>• Part 1: Phỏng vấn ngắn</span>
-                        <strong className="text-gray-900 dark:text-white">{set.part1Questions.length} câu</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>• Part 2: Cue Card (1m prep + 2m speak)</span>
-                        <strong className="text-gray-900 dark:text-white">1 đề</strong>
-                      </div>
-                      <div className="flex items-center justify-between">
-                        <span>• Part 3: Thảo luận chuyên sâu</span>
-                        <strong className="text-gray-900 dark:text-white">{set.part3Questions.length} câu</strong>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Card Action Buttons */}
-                  <div className="pt-6 mt-4 border-t border-gray-100 dark:border-gray-700/60 flex items-center gap-2">
-                    <Link
-                      href={`/speaking/practice/${set.id}?mode=full_mock`}
-                      className="flex-1 bg-primary hover:bg-primary/90 text-white font-bold py-3 rounded-2xl flex items-center justify-center gap-2 text-xs sm:text-sm shadow-md hover:scale-[1.02] transition-all cursor-pointer"
-                    >
-                      <Play className="w-4 h-4 fill-current" />
-                      Thi thử (3 Parts)
-                    </Link>
-
-                    <button
-                      onClick={() => setQuestionPickerSet(set)}
-                      className="bg-primary/10 hover:bg-primary text-primary hover:text-white font-bold px-3.5 py-3 rounded-2xl text-xs sm:text-sm transition-all cursor-pointer shadow-sm"
-                      title="Luyện từng câu đơn"
-                    >
-                      Luyện theo câu
-                    </button>
-                  </div>
+              {/* Load More Button for 100 sets */}
+              {visibleCount < filteredSets.length && (
+                <div className="text-center pt-4 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => setVisibleCount((prev) => prev + 18)}
+                    className="px-8 py-3.5 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-200 dark:border-gray-700 text-primary font-bold text-sm rounded-2xl shadow-sm hover:shadow-md transition-all cursor-pointer inline-flex items-center gap-2"
+                  >
+                    <span>Xem thêm {Math.min(18, filteredSets.length - visibleCount)} bộ đề</span>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 font-normal">
+                      ({filteredSets.length - visibleCount} bộ đề còn lại)
+                    </span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
                 </div>
-              );
-            })}
-          </div>
+              )}
+            </>
+          )}
         </div>
       )}
 
@@ -503,6 +569,13 @@ export default function SpeakingHubPage() {
           </div>
         </div>
       )}
+
+      {/* AI Speaking Set Generator Modal */}
+      <AiSpeakingModal
+        isOpen={isAiModalOpen}
+        onClose={() => setIsAiModalOpen(false)}
+        onSuccess={(newId) => router.push(`/speaking/practice/${newId}?mode=full_mock`)}
+      />
     </div>
   );
 }

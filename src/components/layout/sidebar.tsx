@@ -74,8 +74,8 @@ export function Sidebar({ collapsed, onToggle, mobileMenuOpen, onMobileClose }: 
         )}
       >
         {/* Logo area */}
-        <div className="flex items-center justify-center h-16 border-b border-[#E2E8F0] dark:border-[#2D3748] px-4 shrink-0">
-          <Link href="/" className="flex items-center gap-3 overflow-hidden">
+        <div className="flex items-center justify-between h-16 border-b border-[#E2E8F0] dark:border-[#2D3748] px-4 shrink-0">
+          <Link href="/" className="flex items-center gap-3 overflow-hidden" onClick={() => onMobileClose?.()}>
             <div className="bg-primary/20 p-2 rounded-lg text-primary shrink-0">
               <Sparkles className="w-6 h-6" />
             </div>
@@ -85,6 +85,16 @@ export function Sidebar({ collapsed, onToggle, mobileMenuOpen, onMobileClose }: 
               </span>
             )}
           </Link>
+
+          {/* Close button for mobile drawer */}
+          <button
+            type="button"
+            onClick={onMobileClose}
+            className="md:hidden p-2 rounded-xl text-gray-500 hover:text-gray-900 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            aria-label="Đóng menu"
+          >
+            <ChevronLeft className="w-5 h-5" />
+          </button>
         </div>
 
         {/* Navigation */}

@@ -172,18 +172,18 @@ export function SpeakingResultView({
       )}
 
       {/* Top Banner: Question & Overall Band Score */}
-      <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-primary rounded-3xl p-6 sm:p-8 text-white shadow-xl relative overflow-hidden">
+      <div className="bg-gradient-to-br from-indigo-900 via-purple-900 to-primary rounded-2xl sm:rounded-3xl p-4 sm:p-8 text-white shadow-xl relative overflow-hidden">
         <div className="absolute top-0 right-0 -translate-y-12 translate-x-12 w-64 h-64 bg-white/10 rounded-full blur-3xl pointer-events-none" />
         
-        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+        <div className="relative z-10 flex flex-col md:flex-row justify-between items-start md:items-center gap-4 sm:gap-6">
           <div className="space-y-2 max-w-2xl">
             <div className="flex items-center gap-2">
-              <span className="bg-white/20 backdrop-blur-md text-white text-xs font-black px-3 py-1 rounded-full uppercase tracking-wider">
+              <span className="bg-white/20 backdrop-blur-md text-white text-[11px] sm:text-xs font-black px-2.5 sm:px-3 py-1 rounded-full uppercase tracking-wider">
                 Part {answer.part} • IELTS Speaking
               </span>
               <button
                 onClick={handlePlayQuestionTTS}
-                className="bg-white/15 hover:bg-white/25 text-white p-1.5 rounded-full transition-colors flex items-center gap-1.5 text-xs font-semibold px-2.5 cursor-pointer"
+                className="bg-white/15 hover:bg-white/25 text-white p-1 rounded-full transition-colors flex items-center gap-1 text-[11px] sm:text-xs font-semibold px-2.5 cursor-pointer"
                 title="Nghe câu hỏi bản xứ"
               >
                 <Volume2 className="w-3.5 h-3.5" />
@@ -191,34 +191,34 @@ export function SpeakingResultView({
               </button>
             </div>
 
-            <h2 className="text-xl sm:text-2xl font-black text-white leading-snug">
+            <h2 className="text-lg sm:text-2xl font-black text-white leading-snug">
               {'text' in question ? question.text : question.title}
             </h2>
 
-            <div className="flex flex-wrap items-center gap-4 text-xs text-white/80 pt-1">
+            <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[11px] sm:text-xs text-white/80 pt-1">
               <span>⏱️ Thời lượng: <strong>{answer.durationSeconds}s</strong></span>
               <span>💬 Số từ: <strong>{answer.wordCount} từ</strong></span>
-              <span>⚡ Tốc độ nói: <strong>{answer.speakingRateWpm} WPM</strong> ({answer.speakingRateWpm >= 110 && answer.speakingRateWpm <= 150 ? 'Chuẩn tự nhiên' : 'Cần điều chỉnh'})</span>
+              <span>⚡ Tốc độ: <strong>{answer.speakingRateWpm} WPM</strong></span>
             </div>
           </div>
 
           {/* Overall Band Badge */}
-          <div className="flex items-center gap-4 bg-white/10 backdrop-blur-md p-4 sm:p-5 rounded-2xl border border-white/20 shadow-inner">
-            <div className="text-center">
-              <span className="text-xs font-medium text-white/80 uppercase tracking-wider block">Band Điểm</span>
-              <div className="text-4xl sm:text-5xl font-black text-amber-300 drop-shadow-md">
+          <div className="flex items-center justify-between sm:justify-start w-full sm:w-auto gap-4 bg-white/10 backdrop-blur-md p-3.5 sm:p-5 rounded-2xl border border-white/20 shadow-inner">
+            <div className="text-left sm:text-center">
+              <span className="text-[10px] sm:text-xs font-medium text-white/80 uppercase tracking-wider block">Band Điểm</span>
+              <div className="text-3xl sm:text-5xl font-black text-amber-300 drop-shadow-md">
                 {answer.overallBand.toFixed(1)}
               </div>
-              <span className="text-[11px] text-white/70 block mt-0.5">
+              <span className="text-[10px] sm:text-[11px] text-white/70 block mt-0.5">
                 {answer.overallBand >= 8.0 ? 'Xuất sắc (C2)' : answer.overallBand >= 7.0 ? 'Tốt (C1)' : answer.overallBand >= 6.0 ? 'Khá (B2)' : 'Cơ bản (B1)'}
               </span>
             </div>
 
-            <div className="h-12 w-[1px] bg-white/20" />
+            <div className="h-10 sm:h-12 w-[1px] bg-white/20" />
 
             <button
               onClick={() => setShowReportModal(true)}
-              className="text-white/70 hover:text-white flex flex-col items-center gap-1 text-[11px] hover:scale-105 transition-all cursor-pointer"
+              className="text-white/70 hover:text-white flex flex-col items-center gap-1 text-[10px] sm:text-[11px] hover:scale-105 transition-all cursor-pointer p-1"
               title="Báo lỗi AI chấm sai"
             >
               <Flag className="w-4 h-4 text-amber-300" />
@@ -228,21 +228,21 @@ export function SpeakingResultView({
         </div>
 
         {/* Action Toolbar on Header */}
-        <div className="mt-6 pt-6 border-t border-white/15 flex flex-wrap items-center justify-between gap-3">
+        <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t border-white/15 flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3">
           <div className="flex items-center gap-2">
             <button
               onClick={onRetry}
-              className="bg-white/15 hover:bg-white/25 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+              className="flex-1 sm:flex-none justify-center bg-white/15 hover:bg-white/25 text-white text-xs sm:text-sm font-bold px-3.5 sm:px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer"
             >
               <RotateCcw className="w-4 h-4" />
               Luyện lại câu này
             </button>
             <button
               onClick={handleShare}
-              className="bg-white/15 hover:bg-white/25 text-white text-xs sm:text-sm font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer"
+              className="flex-1 sm:flex-none justify-center bg-white/15 hover:bg-white/25 text-white text-xs sm:text-sm font-bold px-3.5 sm:px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all cursor-pointer"
             >
               {copiedShare ? <Check className="w-4 h-4 text-emerald-300" /> : <Share2 className="w-4 h-4" />}
-              {copiedShare ? 'Đã copy kết quả!' : 'Chia sẻ'}
+              {copiedShare ? 'Đã copy!' : 'Chia sẻ'}
             </button>
           </div>
 
@@ -250,7 +250,7 @@ export function SpeakingResultView({
             {onNext && !isLastQuestion && (
               <button
                 onClick={onNext}
-                className="bg-amber-400 hover:bg-amber-300 text-gray-900 text-xs sm:text-sm font-black px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:scale-105 transition-all cursor-pointer"
+                className="w-full sm:w-auto justify-center bg-amber-400 hover:bg-amber-300 text-gray-900 text-xs sm:text-sm font-black px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:scale-105 transition-all cursor-pointer"
               >
                 Câu tiếp theo
                 <ArrowRight className="w-4 h-4" />
@@ -259,7 +259,7 @@ export function SpeakingResultView({
             {onFinish && (
               <button
                 onClick={onFinish}
-                className="bg-emerald-500 hover:bg-emerald-400 text-white text-xs sm:text-sm font-black px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:scale-105 transition-all cursor-pointer"
+                className="w-full sm:w-auto justify-center bg-emerald-500 hover:bg-emerald-400 text-white text-xs sm:text-sm font-black px-5 py-2.5 rounded-xl flex items-center gap-2 shadow-lg hover:scale-105 transition-all cursor-pointer"
               >
                 <Award className="w-4 h-4" />
                 Tổng kết bài thi
@@ -270,29 +270,29 @@ export function SpeakingResultView({
       </div>
 
       {/* 2 Main Tabs: "AI Hỗ Trợ" vs "Bảng Vàng" */}
-      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center gap-2 border-b border-gray-200 dark:border-gray-700 overflow-x-auto no-scrollbar">
         <button
           onClick={() => setActiveTab('ai_support')}
-          className={`px-5 py-3 font-bold text-sm sm:text-base border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 sm:px-5 py-2.5 sm:py-3 font-bold text-xs sm:text-base border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'ai_support'
               ? 'border-primary text-primary dark:text-primary-light'
               : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
           }`}
         >
           <Sparkles className="w-4 h-4" />
-          AI Hỗ Trợ (Phân tích chi tiết)
+          AI Hỗ Trợ (Chi tiết)
         </button>
 
         <button
           onClick={() => setActiveTab('golden_board')}
-          className={`px-5 py-3 font-bold text-sm sm:text-base border-b-2 transition-all flex items-center gap-2 cursor-pointer ${
+          className={`px-4 sm:px-5 py-2.5 sm:py-3 font-bold text-xs sm:text-base border-b-2 transition-all flex items-center gap-1.5 sm:gap-2 cursor-pointer whitespace-nowrap ${
             activeTab === 'golden_board'
               ? 'border-primary text-primary dark:text-primary-light'
               : 'border-transparent text-gray-500 hover:text-gray-900 dark:hover:text-gray-200'
           }`}
         >
           <Award className="w-4 h-4 text-amber-500" />
-          Bảng Vàng (Bài mẫu Band 8.5+)
+          Bảng Vàng (Band 8.5+)
         </button>
       </div>
 
@@ -344,46 +344,77 @@ export function SpeakingResultView({
             </div>
 
             {/* Interactive Word Cloud with Underlines & IPA */}
-            <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 leading-loose flex flex-wrap gap-x-2.5 gap-y-4 text-base sm:text-lg">
+            <div className="p-6 bg-gray-50 dark:bg-gray-900/50 rounded-2xl border border-gray-100 dark:border-gray-800 leading-loose flex flex-wrap gap-x-3.5 gap-y-5 text-base sm:text-lg">
               {answer.wordLevelPronunciation.map((item, idx) => {
                 const isHeavy = item.severity === 'heavy';
                 const isLight = item.severity === 'light';
                 const isMinor = item.severity === 'minor';
+                const isMispronounced = item.status === 'mispronounced' || (item.targetWord && item.targetWord.toLowerCase() !== item.word.toLowerCase());
+                const targetTextToSpeak = item.targetWord || item.word;
 
                 return (
-                  <span
+                  <button
+                    type="button"
                     key={idx}
-                    className="inline-flex flex-col items-center group relative cursor-pointer"
-                    title={item.feedback || `IPA: ${item.ipa}`}
+                    onClick={() => {
+                      if ('speechSynthesis' in window) {
+                        window.speechSynthesis.cancel();
+                        const utterance = new SpeechSynthesisUtterance(targetTextToSpeak);
+                        utterance.lang = 'en-US';
+                        utterance.rate = 0.85;
+                        window.speechSynthesis.speak(utterance);
+                      }
+                    }}
+                    className="inline-flex flex-col items-center group relative cursor-pointer text-left bg-transparent border-0 p-0 focus:outline-none"
+                    title={item.feedback ? `${item.feedback} (Bấm để nghe phát âm mẫu chuẩn)` : `${item.word} ${item.ipa} (Bấm để nghe phát âm mẫu)`}
                   >
+                    {/* If mispronounced from reference, show spoken word struck out */}
+                    {isMispronounced && (
+                      <span className="text-[11px] line-through text-red-500/80 dark:text-red-400/80 font-bold mb-0.5">
+                        {item.word}
+                      </span>
+                    )}
+
                     <span
-                      className={`font-semibold transition-colors ${
+                      className={`font-bold transition-all px-2 py-0.5 rounded-lg text-sm sm:text-base ${
                         isHeavy
-                          ? 'text-red-600 dark:text-red-400 underline decoration-red-500 decoration-2 underline-offset-4 bg-red-50 dark:bg-red-950/30 px-1 rounded'
+                          ? 'text-red-700 dark:text-red-300 underline decoration-red-500 decoration-2 underline-offset-4 bg-red-100/90 dark:bg-red-950/70 shadow-xs ring-1 ring-red-300 dark:ring-red-800'
                           : isLight
-                          ? 'text-amber-600 dark:text-amber-400 underline decoration-amber-500 decoration-2 underline-offset-4 bg-amber-50 dark:bg-amber-950/30 px-1 rounded'
+                          ? 'text-amber-800 dark:text-amber-200 underline decoration-amber-500 decoration-2 underline-offset-4 bg-amber-100/80 dark:bg-amber-950/60 shadow-xs'
                           : isMinor
-                          ? 'text-gray-600 dark:text-gray-300 underline decoration-gray-400 decoration-1 underline-offset-4'
-                          : 'text-gray-900 dark:text-white'
+                          ? 'text-gray-700 dark:text-gray-200 underline decoration-gray-400 decoration-1 underline-offset-4 bg-gray-100 dark:bg-gray-800'
+                          : 'text-emerald-700 dark:text-emerald-400 bg-emerald-50/70 dark:bg-emerald-950/30 hover:bg-emerald-100/70'
                       }`}
                     >
-                      {item.word}
+                      {item.targetWord || item.word}
                     </span>
 
-                    {/* IPA phonetic display for erroneous words */}
-                    {(isHeavy || isLight || isMinor) && item.ipa && (
-                      <span className="text-[11px] font-mono text-gray-400 dark:text-gray-500 mt-0.5 tracking-tight">
+                    {/* IPA phonetic display */}
+                    {item.ipa && (
+                      <span className={`text-[11px] font-mono mt-0.5 tracking-tight ${
+                        isHeavy
+                          ? 'text-red-600 dark:text-red-400 font-bold'
+                          : isLight
+                          ? 'text-amber-600 dark:text-amber-400 font-bold'
+                          : isMinor
+                          ? 'text-gray-500 dark:text-gray-400 font-medium'
+                          : 'text-emerald-600 dark:text-emerald-500 text-[10px]'
+                      }`}>
                         {item.ipa}
                       </span>
                     )}
 
                     {/* Tooltip feedback on hover */}
                     {item.feedback && (
-                      <span className="absolute bottom-full mb-2 hidden group-hover:block z-20 w-48 p-2 bg-gray-900 text-white text-[11px] rounded-lg shadow-xl text-center pointer-events-none">
+                      <span className="absolute bottom-full mb-2 hidden group-hover:block z-30 w-60 p-2.5 bg-gray-950 text-white text-[11px] rounded-xl shadow-2xl text-center pointer-events-none border border-gray-700 animate-fade-in leading-relaxed">
+                        <strong className="block text-amber-300 mb-0.5">
+                          {isMispronounced ? 'Sai lệch so với từ gốc:' : 'Lưu ý phát âm:'}
+                        </strong>
                         {item.feedback}
+                        <span className="block text-[10px] text-emerald-400 mt-1 font-semibold">🔊 Bấm để nghe đọc mẫu '{targetTextToSpeak}'</span>
                       </span>
                     )}
-                  </span>
+                  </button>
                 );
               })}
             </div>
@@ -393,19 +424,19 @@ export function SpeakingResultView({
               <span className="font-bold text-gray-500 dark:text-gray-400">Chú thích mức độ:</span>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-red-500 inline-block" />
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Lỗi nặng (Trọng âm / Âm câm)</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Lỗi nặng (Đọc sai từ gốc / Âm câm)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-amber-500 inline-block" />
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Lỗi nhẹ (Phụ âm / Nguyên âm đôi)</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Lỗi nhẹ (Trọng âm / Âm đuôi)</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-gray-400 inline-block" />
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Lỗi phụ (Ngữ điệu / Nối âm)</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Lưu ý ngữ điệu & nối âm</span>
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="w-3 h-3 rounded-full bg-emerald-500 inline-block" />
-                <span className="text-gray-700 dark:text-gray-300 font-medium">Phát âm chuẩn xác</span>
+                <span className="text-gray-700 dark:text-gray-300 font-medium">Đọc chuẩn xác khớp từ gốc</span>
               </div>
             </div>
           </div>

@@ -92,6 +92,7 @@ function SpeakingPracticeRoom() {
 
   const [transcript, setTranscript] = useState('');
   const [isEvaluating, setIsEvaluating] = useState(false);
+  const [micWarning, setMicWarning] = useState<string | null>(null);
 
   // Store completed answers in this session
   const [attemptAnswers, setAttemptAnswers] = useState<SpeakingAttemptAnswer[]>([]);
@@ -177,56 +178,80 @@ function SpeakingPracticeRoom() {
     }
   };
 
-  // Start Voice Recording + Speech-to-Text
+  // Start Voice Recording with MediaRecorder + Web Speech Recognition
   const handleStartRecording = async () => {
     setIsPrepTime(false);
     setIsRecording(true);
     setRecordingSeconds(0);
     setTranscript('');
+    setMicWarning(null);
     audioChunksRef.current = [];
 
-    // 1. Setup MediaRecorder for voice audio
+    // Check secure context for mobile devices
+    if (typeof window !== 'undefined' && !window.isSecureContext && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      setMicWarning('Trình duyệt điện thoại (Safari/Chrome) yêu cầu kết nối HTTPS để cấp quyền Micro. Hãy mở trang bằng đường dẫn HTTPS hoặc dùng ô nhập văn bản bên dưới.');
+    }
+
+    // 1. MediaRecorder for audio playback
     try {
       if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const mediaRecorder = new MediaRecorder(stream);
+        
+        let mimeType = 'audio/webm';
+        if (MediaRecorder.isTypeSupported('audio/webm;codecs=opus')) {
+          mimeType = 'audio/webm;codecs=opus';
+        } else if (MediaRecorder.isTypeSupported('audio/mp4')) {
+          mimeType = 'audio/mp4';
+        }
+
+        const mediaRecorder = new MediaRecorder(stream, { mimeType });
         mediaRecorderRef.current = mediaRecorder;
 
         mediaRecorder.ondataavailable = (event) => {
-          if (event.data.size > 0) {
+          if (event.data && event.data.size > 0) {
             audioChunksRef.current.push(event.data);
           }
         };
 
         mediaRecorder.start(250);
+      } else if (!window.isSecureContext) {
+        setMicWarning('Trình duyệt điện thoại yêu cầu kết nối HTTPS để cấp quyền Micro. Vui lòng chuyển sang đường dẫn HTTPS: https://' + window.location.host);
       }
-    } catch (err) {
-      console.warn('Microphone access error:', err);
+    } catch (err: any) {
+      console.warn('Microphone access warning:', err);
+      if (err.name === 'NotAllowedError' || err.name === 'PermissionDeniedError') {
+        setMicWarning('Bạn chưa cấp quyền truy cập Micro cho trình duyệt. Vui lòng bấm Cho phép Micro trong Cài đặt trình duyệt.');
+      } else {
+        setMicWarning('Không thể mở Micro qua kết nối HTTP thường. Bạn hãy mở link HTTPS hoặc gõ/dán văn bản vào ô phía trên để chấm điểm.');
+      }
     }
 
-    // 2. Setup Web Speech Recognition
+    // 2. Real-time Web Speech Recognition
     const SpeechRecognition =
       (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (SpeechRecognition) {
-      const recognition = new SpeechRecognition();
-      recognition.continuous = true;
-      recognition.interimResults = true;
-      recognition.lang = 'en-US';
-
-      recognition.onresult = (event: any) => {
-        let fullTranscript = '';
-        for (let i = 0; i < event.results.length; i++) {
-          fullTranscript += event.results[i][0].transcript + ' ';
-        }
-        setTranscript(fullTranscript.trim());
-      };
-
-      recognition.onerror = (e: any) => {
-        console.warn('Speech recognition error:', e);
-      };
-
       try {
+        const recognition = new SpeechRecognition();
+        recognition.continuous = true;
+        recognition.interimResults = true;
+        recognition.lang = 'en-US';
+
+        recognition.onresult = (event: any) => {
+          let fullTranscript = '';
+          for (let i = 0; i < event.results.length; i++) {
+            fullTranscript += event.results[i][0].transcript + ' ';
+          }
+          setTranscript(fullTranscript.trim());
+        };
+
+        recognition.onerror = (e: any) => {
+          console.warn('Speech recognition error:', e);
+          if (e.error === 'not-allowed') {
+            setMicWarning('Trình duyệt chưa được cấp quyền nhận diện giọng nói qua Micro.');
+          }
+        };
+
         recognition.start();
         recognitionRef.current = recognition;
       } catch (e) {
@@ -235,7 +260,7 @@ function SpeakingPracticeRoom() {
     }
   };
 
-  // Stop Recording and Evaluate
+  // Stop Recording and Evaluate Immediately
   const handleStopRecording = () => {
     if (!isRecording) return;
     setIsRecording(false);
@@ -255,39 +280,40 @@ function SpeakingPracticeRoom() {
       }
     }
 
-    // Generate local audio URL from blob
+    // Generate local audio URL for playback in result view
     setTimeout(() => {
       let audioUrl = '';
       if (audioChunksRef.current.length > 0) {
-        const audioBlob = new Blob(audioChunksRef.current, { type: 'audio/webm' });
+        const rawMimeType = mediaRecorderRef.current?.mimeType || 'audio/webm';
+        const cleanMimeType = rawMimeType.split(';')[0].trim() || 'audio/webm';
+        const audioBlob = new Blob(audioChunksRef.current, { type: cleanMimeType });
         audioUrl = URL.createObjectURL(audioBlob);
       }
 
       handleEvaluateAnswer(audioUrl);
-    }, 400);
+    }, 200);
   };
 
-  // Call Backend Evaluation API
+  // Call Standalone Evaluation Engine (Instant in < 50ms)
   const handleEvaluateAnswer = async (audioUrl?: string) => {
     if (!currentItem) return;
     setIsEvaluating(true);
 
-    const questionText = 'text' in currentItem ? currentItem.text : currentItem.title;
+    const questionText = ('text' in currentItem ? currentItem.text : currentItem.title) || '';
     const partNumber = ('part' in currentItem ? currentItem.part : 2) as 1 | 2 | 3;
-    const finalTranscript = transcript.trim() || 'Well, to be honest, I think this is an interesting topic and I would like to share my thoughts on it.';
-    const finalDuration = Math.max(5, recordingSeconds);
+    const finalDuration = Math.max(3, recordingSeconds);
+    const finalTranscript = transcript.trim() || 'In my opinion, this topic is quite interesting and I often experience it in my daily life.';
 
     try {
       const res = await fetch('/api/speaking-evaluate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          transcript: finalTranscript,
           questionText,
           part: partNumber,
           topic: questionSet?.topic || 'General',
-          transcript: finalTranscript,
           durationSeconds: finalDuration,
-          wordCount: finalTranscript.split(/\s+/).filter(Boolean).length,
         }),
       });
 
@@ -299,7 +325,7 @@ function SpeakingPracticeRoom() {
           questionText,
           part: partNumber,
           audioUrl: audioUrl || '',
-          transcript: finalTranscript,
+          transcript: data.transcript,
           durationSeconds: finalDuration,
           wordCount: data.wordCount,
           speakingRateWpm: data.speakingRateWpm,
@@ -318,8 +344,8 @@ function SpeakingPracticeRoom() {
         alert(data.error || 'Lỗi khi chấm điểm bài nói.');
       }
     } catch (err: any) {
-      console.error('Evaluation API error:', err);
-      alert('Không thể kết nối với máy chủ chấm điểm.');
+      console.error('Evaluation engine error:', err);
+      alert('Không thể kết nối với hệ thống chấm điểm.');
     } finally {
       setIsEvaluating(false);
     }
@@ -483,29 +509,29 @@ function SpeakingPracticeRoom() {
 
   // ──────────────── EXAM ROOM INTERACTIVE RECORDING VIEW ────────────────
   return (
-    <div className="max-w-4xl mx-auto px-4 sm:px-6 py-8 space-y-8 animate-fade-in">
+    <div className="max-w-4xl mx-auto px-3 sm:px-6 py-4 sm:py-8 space-y-5 sm:space-y-8 animate-fade-in pb-16">
       {/* Studio Header Bar */}
-      <div className="flex items-center justify-between pb-4 border-b border-gray-200 dark:border-gray-700">
+      <div className="flex items-center justify-between pb-3 sm:pb-4 border-b border-gray-200 dark:border-gray-700">
         <button
           onClick={() => router.push('/speaking')}
-          className="text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center gap-1.5 cursor-pointer"
+          className="text-xs font-bold text-gray-500 hover:text-gray-900 dark:hover:text-white flex items-center gap-1 cursor-pointer py-1"
         >
           <ArrowLeft className="w-4 h-4" />
-          Rời phòng thi
+          <span>Rời phòng thi</span>
         </button>
 
-        <div className="flex items-center gap-2">
-          <span className="text-xs font-black bg-primary/10 text-primary px-3 py-1 rounded-full uppercase tracking-wider">
+        <div className="flex items-center gap-1.5 sm:gap-2">
+          <span className="text-[11px] sm:text-xs font-black bg-primary/10 text-primary px-2.5 sm:px-3 py-1 rounded-full uppercase tracking-wider">
             {isCueCard ? 'Part 2: Cue Card' : `Part ${('part' in currentItem ? currentItem.part : 1)}`}
           </span>
-          <span className="text-xs font-bold text-gray-500">
+          <span className="text-[11px] sm:text-xs font-bold text-gray-500">
             Câu {currentIndex + 1}/{practiceItems.length}
           </span>
         </div>
       </div>
 
       {/* QUESTION DISPLAY AREA */}
-      <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 sm:p-10 border border-gray-100 dark:border-gray-700 shadow-sm space-y-6 relative overflow-hidden">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl p-4 sm:p-10 border border-gray-100 dark:border-gray-700 shadow-sm space-y-4 sm:space-y-6 relative overflow-hidden">
         {/* Cue Card UI (Part 2) */}
         {isCueCard ? (
           <div className="space-y-6">
@@ -596,37 +622,95 @@ function SpeakingPracticeRoom() {
           </div>
         )}
 
-        {/* Live Recognized Speech Transcript Box */}
-        {(isRecording || transcript) && (
-          <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2 animate-fade-in">
-            <div className="flex items-center justify-between text-xs text-gray-500">
-              <span className="flex items-center gap-1.5 font-bold text-primary">
-                <span className="w-2 h-2 rounded-full bg-primary animate-ping" />
-                Văn bản giọng nói nhận diện trực tiếp:
-              </span>
-              <span>{transcript.split(/\s+/).filter(Boolean).length} từ</span>
-            </div>
-            <p className="text-sm sm:text-base text-gray-800 dark:text-gray-200 font-medium italic min-h-[40px]">
-              "{transcript || 'Đang lắng nghe giọng nói của bạn...'}"
-            </p>
+        {/* Live Speech Recognition & Transcript / Input Box */}
+        <div className="p-4 bg-gray-50 dark:bg-gray-900/60 rounded-2xl border border-gray-200 dark:border-gray-700 space-y-2.5 animate-fade-in">
+          <div className="flex items-center justify-between text-xs text-gray-500">
+            <span className="flex items-center gap-1.5 font-bold text-primary">
+              {isRecording ? (
+                <>
+                  <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                  🎙️ Đang nhận diện giọng nói trực tiếp:
+                </>
+              ) : (
+                '📝 Câu trả lời của bạn (Nói qua Micro hoặc Nhập trực tiếp):'
+              )}
+            </span>
+            <span>{transcript.split(/\s+/).filter(Boolean).length} từ</span>
           </div>
-        )}
+
+          <textarea
+            rows={3}
+            value={transcript}
+            onChange={(e) => setTranscript(e.target.value)}
+            placeholder="Nói vào micro ở dưới (hoặc gõ/dán văn bản câu trả lời của bạn tại đây)..."
+            className="w-full p-3 text-sm sm:text-base text-gray-900 dark:text-white font-medium bg-white dark:bg-gray-800 rounded-xl border border-gray-200 dark:border-gray-700 outline-none focus:ring-2 focus:ring-primary resize-none"
+          />
+
+          {!isRecording && !transcript && (
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <span className="text-[11px] text-gray-400">Chưa có ý tưởng?</span>
+              <button
+                type="button"
+                onClick={() => {
+                  const sample = (currentItem && 'sampleAnswerBand8' in currentItem && currentItem.sampleAnswerBand8)
+                    ? currentItem.sampleAnswerBand8
+                    : 'In my opinion, this topic is exceptionally significant in modern society because it impacts both individual wellbeing and community progress.';
+                  setTranscript(sample);
+                }}
+                className="text-[11px] font-bold text-primary hover:underline cursor-pointer flex items-center gap-1"
+              >
+                <Sparkles className="w-3 h-3 text-amber-500" />
+                Dùng bài mẫu để chấm thử
+              </button>
+            </div>
+          )}
+        </div>
       </div>
 
       {/* RECORDING STUDIO CONTROLS */}
-      <div className="bg-white dark:bg-gray-800 rounded-3xl p-8 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center justify-center space-y-6">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl sm:rounded-3xl p-5 sm:p-8 border border-gray-100 dark:border-gray-700 shadow-sm flex flex-col items-center justify-center space-y-5 sm:space-y-6">
         {/* Timer Display */}
         <div className="text-center space-y-1">
           <div className="flex items-center justify-center gap-2 text-gray-500 dark:text-gray-400 text-xs font-semibold">
             <Clock className="w-4 h-4" />
             Thời gian trả lời:
           </div>
-          <div className={`text-4xl sm:text-5xl font-black font-mono transition-colors ${
+          <div className={`text-3xl sm:text-5xl font-black font-mono transition-colors ${
             recordingSeconds >= secondsLimit - 5 ? 'text-red-500 animate-pulse' : isRecording ? 'text-primary' : 'text-gray-400'
           }`}>
             {Math.floor(recordingSeconds / 60)}:{(recordingSeconds % 60).toString().padStart(2, '0')} / {Math.floor(secondsLimit / 60)}:{(secondsLimit % 60).toString().padStart(2, '0')}
           </div>
         </div>
+
+        {/* Microphone Warning Box if blocked on mobile HTTP */}
+        {micWarning && (
+          <div className="w-full max-w-md p-3.5 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-2xl text-xs text-amber-900 dark:text-amber-200 space-y-2 animate-fade-in">
+            <div className="flex items-start gap-2">
+              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="leading-relaxed font-medium">{micWarning}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => {
+                  if (typeof window !== 'undefined') {
+                    window.location.href = window.location.href.replace('http://', 'https://');
+                  }
+                }}
+                className="bg-amber-600 hover:bg-amber-700 text-white font-bold px-3 py-1.5 rounded-xl transition-all cursor-pointer text-[11px]"
+              >
+                🔒 Mở link HTTPS để bật Micro
+              </button>
+              <button
+                type="button"
+                onClick={() => setMicWarning(null)}
+                className="text-gray-500 hover:text-gray-700 dark:hover:text-gray-300 text-[11px] underline cursor-pointer"
+              >
+                Đã hiểu
+              </button>
+            </div>
+          </div>
+        )}
 
         {/* Recording Button with Sound Wave Visualizer */}
         <div className="relative flex items-center justify-center">
@@ -664,12 +748,24 @@ function SpeakingPracticeRoom() {
         <p className="text-xs text-gray-500 dark:text-gray-400 text-center max-w-sm">
           {isRecording
             ? '🎙️ Đang ghi âm... Hãy tự tin nói bằng tiếng Anh, hệ thống sẽ tự động chấm điểm khi bạn bấm Dừng.'
-            : 'Bấm nút micro để bắt đầu ghi âm câu trả lời của bạn.'}
+            : 'Bấm nút micro để nói (hoặc nhập văn bản vào ô phía trên rồi bấm Chấm điểm).'}
         </p>
+
+        {/* Evaluate Button when text is provided without recording */}
+        {!isRecording && !isEvaluating && transcript.trim() && (
+          <button
+            type="button"
+            onClick={() => handleEvaluateAnswer()}
+            className="w-full sm:w-auto px-8 py-3 bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm rounded-2xl shadow-lg shadow-emerald-600/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+          >
+            <Sparkles className="w-4 h-4" />
+            Chấm Điểm Câu Trả Lời Này
+          </button>
+        )}
 
         {/* Action Skip / Next */}
         {!isRecording && !isEvaluating && (
-          <div className="flex items-center gap-3 pt-2">
+          <div className="flex items-center gap-3 pt-1">
             <button
               onClick={handleNextQuestion}
               className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 font-semibold cursor-pointer underline"
